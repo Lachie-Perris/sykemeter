@@ -1,34 +1,29 @@
 """
-Generate a browser-ready surf forecast from:
+Automated browser-ready surf forecast.
 
-- NOAA GFS Wave data at a fixed model grid point
-- A local wave-transfer matrix
-- MSQ/BOM predicted tide data for Heron Island
-- A weighted surf-quality rating
+Data sources
+------------
+- NOAA GFS Wave at a fixed 0.25-degree model point
+- A local direction-period wave-transfer matrix
+- MSQ/BOM predicted interval tide data using the original notebook method
 
-This module creates only the final forecast plot. It does not write
-intermediate CSV files or plots.
+Public entry point
+------------------
+generate_final_plot(
+    date_string="YYYYMMDD",
+    cycle="00",
+    output_path="docs/final_surf_forecast.svg",
+)
 
-The public entry point is:
-
-    generate_final_plot(
-        date_string="20260713",
-        cycle="00",
-        output_path="docs/final_surf_forecast.svg",
-    )
+The module creates only the requested final plot. It does not create
+intermediate CSV files or figures.
 """
 
 from __future__ import annotations
 
-
-#### HEADLESS MATPLOTLIB #######################################################
-
 import matplotlib
 
 matplotlib.use("Agg")
-
-
-#### IMPORTS ###################################################################
 
 from dataclasses import dataclass
 from io import StringIO
@@ -63,23 +58,19 @@ TRANSFER_MATRIX_PATH = (
 
 #### LOCATION CONFIGURATION ####################################################
 
-# Name displayed in the final plot.
-SPOT_NAME = "Sykemeter"
+SPOT_NAME = "Heron Island Surf Forecast"
 
-# Actual surf location.
 SPOT_LAT = -23.348043530796062
 SPOT_LON = 152.618531665867
 
-# Known nearest GFS Wave model point.
+# Known nearest GFS Wave grid point.
 GFS_GRID_LAT = -23.25
 GFS_GRID_LON = 152.50
 
-# Tide station used for the forecast.
-TIDE_STATION = "Heron Island"
+LOCAL_TZ = "Australia/Brisbane"
+LOCAL_TZ_INFO = ZoneInfo(LOCAL_TZ)
 
-# Queensland does not use daylight-saving time.
-LOCAL_TIMEZONE = "Australia/Brisbane"
-LOCAL_TZ_INFO = ZoneInfo(LOCAL_TIMEZONE)
+TIDE_STATION = "Heron Island"
 
 
 #### FORECAST CONFIGURATION ####################################################
@@ -87,15 +78,11 @@ LOCAL_TZ_INFO = ZoneInfo(LOCAL_TIMEZONE)
 FORECAST_LENGTH_HOURS = 168
 FORECAST_STEP_HOURS = 3
 
-# This small box contains only the known GFS grid point.
 BBOX_PADDING_DEGREES = 0.02
 
-# Brief pause between NOAA requests.
+REQUEST_TIMEOUT_SECONDS = 90
 REQUEST_PAUSE_SECONDS = 0.10
 
-REQUEST_TIMEOUT_SECONDS = 90
-
-# Tide predictions are normally spaced at 10-minute intervals.
 TIDE_MATCH_TOLERANCE = pd.Timedelta("20min")
 
 
@@ -106,7 +93,8 @@ NOMADS_WAVE_FILTER = (
     "cgi-bin/filter_gfswave.pl"
 )
 
-CKAN_API_BASE = (
+# Original notebook tide-source settings.
+CKAN_BASE = (
     "https://www.data.qld.gov.au/"
     "api/3/action"
 )
@@ -119,10 +107,7 @@ DATASTORE_DUMP_BASE = (
 
 #### PLOT CONFIGURATION ########################################################
 
-# Limits the number of direction arrows to avoid crowded browser output.
 MAX_DIRECTION_ANNOTATIONS = 20
-
-# Red at 0, yellow at 50 and green at 100.
 QUALITY_COLOUR_MAP = "RdYlGn"
 
 plt.rcParams.update(
@@ -149,7 +134,6 @@ plt.rcParams.update(
 
 #### TRANSFER-MATRIX MAPPINGS ##################################################
 
-# Rows represent primary wave direction.
 ROW_MAPPING = {
     15: 0,
     30: 1,
@@ -177,7 +161,6 @@ ROW_MAPPING = {
     360: 23,
 }
 
-# Columns represent primary wave period.
 COL_MAPPING = {
     24: 0,
     23: 1,
@@ -203,7 +186,7 @@ COL_MAPPING = {
 }
 
 
-#### QUALITY WEIGHTS ###########################################################
+#### QUALITY CONFIGURATION #####################################################
 
 QUALITY_WEIGHTS = {
     "wave_height": 0.25,
@@ -222,9 +205,6 @@ QUALITY_COMPONENTS = (
     "wind_speed",
     "wind_direction",
 )
-
-
-#### COMPASS LABELS ############################################################
 
 COMPASS_POINTS = np.array(
     [
@@ -249,9 +229,9 @@ COMPASS_POINTS = np.array(
 )
 
 
-#### TIDE RESOURCE #############################################################
+#### TIDE RESOURCE INFORMATION #################################################
 
-@dataclass(frozen=True)
+@dataclass
 class TideResource:
     station_name: str
     package_name: str
@@ -261,14 +241,11 @@ class TideResource:
     url: str | None
 
 
-#### HTTP SESSION ##############################################################
+#### HTTP SESSION FOR GFS ######################################################
 
 def create_http_session() -> requests.Session:
     """
-    Create one reusable HTTP session with automatic retries.
-
-    Reusing the session avoids creating a new HTTPS connection for every
-    GFS forecast lead time.
+    Create a reusable session with retries for GFS downloads.
     """
     retry_policy = Retry(
         total=4,
@@ -307,12 +284,6 @@ def create_http_session() -> requests.Session:
             "User-Agent": (
                 "Heron Island automated surf forecast"
             ),
-            "Accept": (
-                "application/json,"
-                "text/csv,"
-                "text/plain,"
-                "*/*"
-            ),
         }
     )
 
@@ -325,7 +296,7 @@ def scalar(
     data_array: xr.DataArray,
 ) -> float:
     """
-    Convert a scalar xarray DataArray into a Python float.
+    Convert a scalar xarray value into a Python float.
     """
     return float(
         np.asarray(
@@ -360,7 +331,7 @@ def direction_to_compass(
     directions_deg,
 ) -> np.ndarray:
     """
-    Convert bearings into 16-point compass labels.
+    Convert bearings to 16-point compass labels.
     """
     directions = np.asarray(
         directions_deg,
@@ -392,7 +363,7 @@ def direction_to_compass(
     return labels
 
 
-#### TRANSFER-MATRIX LOADING ###################################################
+#### TRANSFER MATRIX ###########################################################
 
 def load_transfer_matrix(
     path: Path = TRANSFER_MATRIX_PATH,
@@ -439,16 +410,12 @@ def load_transfer_matrix(
     return matrix
 
 
-#### TRANSFER-MATRIX APPLICATION ###############################################
-
 def apply_transfer_matrix(
     forecast: pd.DataFrame,
     transfer_matrix: np.ndarray,
 ) -> pd.DataFrame:
     """
-    Apply the direction-period transfer matrix.
-
-    Nearshore Hs = offshore GFS Hs × transfer coefficient.
+    Convert offshore GFS Hs to estimated nearshore Hs.
     """
     result = forecast.copy()
 
@@ -464,7 +431,6 @@ def apply_transfer_matrix(
         dtype=float
     )
 
-    # Round wave direction to the nearest 15 degrees.
     mapped_directions = (
         np.floor(
             (
@@ -476,7 +442,6 @@ def apply_transfer_matrix(
         * 15.0
     ).astype(int)
 
-    # North is represented by 360 in the matrix.
     mapped_directions[
         (
             mapped_directions == 0
@@ -486,7 +451,6 @@ def apply_transfer_matrix(
         )
     ] = 360
 
-    # Round period to the nearest whole second.
     mapped_periods = np.floor(
         wave_periods + 0.5
     ).astype(int)
@@ -524,20 +488,24 @@ def apply_transfer_matrix(
         column_indices,
     ]
 
-    result["matrix_direction_deg"] = (
-        mapped_directions
-    )
+    result[
+        "matrix_direction_deg"
+    ] = mapped_directions
 
-    result["matrix_period_s"] = (
-        mapped_periods
-    )
+    result[
+        "matrix_period_s"
+    ] = mapped_periods
 
-    result["transfer_coefficient"] = (
-        coefficients
-    )
+    result[
+        "transfer_coefficient"
+    ] = coefficients
 
-    result["nearshore_wave_height_m"] = (
-        result["wave_height_m"].to_numpy(
+    result[
+        "nearshore_wave_height_m"
+    ] = (
+        result[
+            "wave_height_m"
+        ].to_numpy(
             dtype=float
         )
         * coefficients
@@ -546,7 +514,7 @@ def apply_transfer_matrix(
     return result
 
 
-#### FIXED GFS BOUNDING BOX ####################################################
+#### GFS WAVE DOWNLOAD #########################################################
 
 BOUNDING_BOX = {
     "leftlon": round(
@@ -572,22 +540,13 @@ BOUNDING_BOX = {
 }
 
 
-#### GFS URL CONSTRUCTION ######################################################
-
 def build_wave_url(
     date_string: str,
     cycle: str,
     forecast_hour: int,
 ) -> str:
     """
-    Build a NOMADS request for one forecast lead time.
-
-    The response contains:
-        Wave height
-        Primary wave period
-        Primary wave direction
-        Wind speed
-        Wind direction
+    Build a NOMADS URL for one small wave-and-wind subset.
     """
     filename = (
         f"gfswave.t{cycle}z."
@@ -619,15 +578,13 @@ def build_wave_url(
     )
 
 
-#### GFS DOWNLOAD ##############################################################
-
 def download_grib(
     session: requests.Session,
     url: str,
     destination: Path,
 ) -> None:
     """
-    Download and validate one small GFS Wave GRIB subset.
+    Download and validate one GFS Wave GRIB subset.
     """
     response = session.get(
         url,
@@ -656,16 +613,11 @@ def download_grib(
     )
 
 
-#### GRIB OPENING ##############################################################
-
 def open_grib(
     path: Path,
 ) -> xr.Dataset:
     """
-    Open a small GFS Wave surface GRIB file.
-
-    The fast xarray path is tried first. If cfgrib separates the fields
-    into multiple datasets, they are loaded and merged.
+    Open the downloaded surface GRIB, merging cfgrib groups if needed.
     """
     backend_kwargs = {
         "indexpath": "",
@@ -701,8 +653,6 @@ def open_grib(
                 combine_attrs="override",
             )
 
-            # The files are tiny, so loading immediately releases the
-            # underlying GRIB file handles.
             merged.load()
 
         finally:
@@ -712,15 +662,13 @@ def open_grib(
         return merged
 
 
-#### GRIB VARIABLE LOOKUP ######################################################
-
 def find_variable(
     dataset: xr.Dataset,
     exact_names: tuple[str, ...],
     metadata_terms: tuple[str, ...],
 ) -> xr.DataArray:
     """
-    Find a GRIB variable by name, then by descriptive metadata.
+    Find a GRIB variable by name and then by metadata.
     """
     for variable_name in exact_names:
         if variable_name in dataset.data_vars:
@@ -728,7 +676,7 @@ def find_variable(
                 variable_name
             ]
 
-    for variable_name, data_array in dataset.data_vars.items():
+    for _, data_array in dataset.data_vars.items():
         metadata = " ".join(
             str(
                 data_array.attrs.get(
@@ -757,16 +705,11 @@ def find_variable(
     )
 
 
-#### FIXED GRID-POINT SELECTION ################################################
-
 def select_downloaded_grid_point(
     dataset: xr.Dataset,
 ) -> xr.Dataset:
     """
-    Select the single point in the downloaded GRIB subset.
-
-    This avoids nearest-neighbour searching and avoids floating-point
-    coordinate differences such as 152.500006 versus 152.5.
+    Select the single point returned by the NOMADS subset.
     """
     latitude_name = (
         "latitude"
@@ -822,8 +765,6 @@ def select_downloaded_grid_point(
     return dataset
 
 
-#### FORECAST VALID TIME #######################################################
-
 def get_valid_time(
     dataset: xr.Dataset,
     date_string: str,
@@ -831,7 +772,7 @@ def get_valid_time(
     forecast_hour: int,
 ) -> pd.Timestamp:
     """
-    Return the valid forecast time as a UTC timestamp.
+    Return the valid forecast time in UTC.
     """
     if "valid_time" in dataset.coords:
         valid_time = np.asarray(
@@ -861,8 +802,6 @@ def get_valid_time(
     )
 
 
-#### FORECAST RECORD READING ###################################################
-
 def read_forecast_record(
     grib_path: Path,
     date_string: str,
@@ -870,7 +809,7 @@ def read_forecast_record(
     forecast_hour: int,
 ) -> dict[str, object]:
     """
-    Read wave and wind values from one GFS Wave GRIB file.
+    Read one GFS wave-and-wind record.
     """
     dataset = open_grib(
         grib_path
@@ -987,20 +926,6 @@ def read_forecast_record(
                 f"Received: {downloaded_longitude}"
             )
 
-        wave_direction_deg = (
-            scalar(
-                wave_direction
-            )
-            % 360.0
-        )
-
-        wind_direction_deg = (
-            scalar(
-                wind_direction
-            )
-            % 360.0
-        )
-
         wind_speed_ms = scalar(
             wind_speed
         )
@@ -1020,31 +945,29 @@ def read_forecast_record(
                 wave_period
             ),
             "wave_direction_deg": (
-                wave_direction_deg
+                scalar(
+                    wave_direction
+                )
+                % 360.0
             ),
-            "wind_speed_ms": (
-                wind_speed_ms
-            ),
+            "wind_speed_ms": wind_speed_ms,
             "wind_speed_knots": (
                 wind_speed_ms
                 * 1.943844
             ),
             "wind_direction_deg": (
-                wind_direction_deg
+                scalar(
+                    wind_direction
+                )
+                % 360.0
             ),
-            "grid_latitude": (
-                downloaded_latitude
-            ),
-            "grid_longitude": (
-                downloaded_longitude
-            ),
+            "grid_latitude": downloaded_latitude,
+            "grid_longitude": downloaded_longitude,
         }
 
     finally:
         dataset.close()
 
-
-#### GFS FORECAST COLLECTION ###################################################
 
 def collect_forecast(
     transfer_matrix: np.ndarray,
@@ -1052,12 +975,12 @@ def collect_forecast(
     cycle: str,
 ) -> pd.DataFrame:
     """
-    Download and process the complete GFS Wave forecast.
-
-    The cycle is supplied externally so the GitHub workflow does not
-    rediscover the model cycle during the expensive generation step.
+    Download and process the full selected GFS Wave cycle.
     """
-    if len(date_string) != 8 or not date_string.isdigit():
+    if (
+        len(date_string) != 8
+        or not date_string.isdigit()
+    ):
         raise ValueError(
             "date_string must use YYYYMMDD format."
         )
@@ -1086,15 +1009,13 @@ def collect_forecast(
             )
 
             for forecast_hour in forecast_hours():
-                wave_url = build_wave_url(
-                    date_string=date_string,
-                    cycle=cycle,
-                    forecast_hour=forecast_hour,
-                )
-
                 download_grib(
                     session=session,
-                    url=wave_url,
+                    url=build_wave_url(
+                        date_string=date_string,
+                        cycle=cycle,
+                        forecast_hour=forecast_hour,
+                    ),
                     destination=grib_path,
                 )
 
@@ -1121,12 +1042,10 @@ def collect_forecast(
             "No GFS forecast records were collected."
         )
 
-    forecast = pd.DataFrame(
-        records
-    )
-
     forecast = (
-        forecast
+        pd.DataFrame(
+            records
+        )
         .sort_values(
             "time_utc"
         )
@@ -1157,43 +1076,47 @@ def collect_forecast(
         transfer_matrix=transfer_matrix,
     )
 
-    forecast["spot_name"] = (
-        SPOT_NAME
-    )
+    forecast[
+        "spot_name"
+    ] = SPOT_NAME
 
-    forecast["spot_latitude"] = (
-        SPOT_LAT
-    )
+    forecast[
+        "spot_latitude"
+    ] = SPOT_LAT
 
-    forecast["spot_longitude"] = (
-        SPOT_LON
-    )
+    forecast[
+        "spot_longitude"
+    ] = SPOT_LON
 
-    forecast["run_date"] = (
-        date_string
-    )
+    forecast[
+        "run_date"
+    ] = date_string
 
-    forecast["run_cycle"] = (
-        cycle
-    )
+    forecast[
+        "run_cycle"
+    ] = cycle
 
     return forecast
 
 
-#### CKAN API ##################################################################
+#### ORIGINAL NOTEBOOK TIDE METHOD #############################################
 
 def ckan_get(
-    session: requests.Session,
     action: str,
-    **parameters,
+    params: dict,
+    timeout: int = 45,
 ) -> dict:
     """
-    Call the Queensland Government Open Data CKAN API.
+    Call the Queensland Government CKAN API.
+
+    This preserves the original notebook method.
     """
-    response = session.get(
-        f"{CKAN_API_BASE}/{action}",
-        params=parameters,
-        timeout=REQUEST_TIMEOUT_SECONDS,
+    url = f"{CKAN_BASE}/{action}"
+
+    response = requests.get(
+        url,
+        params=params,
+        timeout=timeout,
     )
 
     response.raise_for_status()
@@ -1205,7 +1128,7 @@ def ckan_get(
         False,
     ):
         raise RuntimeError(
-            f"CKAN API request failed for '{action}'."
+            f"CKAN API call failed: {payload}"
         )
 
     return payload[
@@ -1213,43 +1136,32 @@ def ckan_get(
     ]
 
 
-#### TIDE PACKAGE SEARCH #######################################################
-
 def search_msq_tide_package(
-    session: requests.Session,
     station_name: str,
 ) -> dict:
     """
-    Find the MSQ predicted interval tide package for the station.
+    Search for the station's predicted interval tide dataset.
 
-    The search structure follows the working MSQ catalogue workflow.
+    Important:
+        The broad fallback below is retained exactly from the working
+        notebook. It is intentionally less strict than the failed GitHub
+        version.
     """
     queries = [
-        (
-            f'"{station_name}" '
-            f'"predicted interval data" tide'
-        ),
-        (
-            f'"{station_name}" '
-            f'"tide gauge" '
-            f'"predicted interval"'
-        ),
-        (
-            f"{station_name} tide gauge "
-            f"predicted interval data"
-        ),
+        f'"{station_name}" "predicted interval data" tide',
+        f'"{station_name}" "tide gauge" "predicted interval"',
+        f"{station_name} tide gauge predicted interval data",
     ]
 
-    station_lower = (
-        station_name.lower()
-    )
+    station_lower = station_name.lower()
 
     for query in queries:
         result = ckan_get(
-            session,
             "package_search",
-            q=query,
-            rows=20,
+            params={
+                "q": query,
+                "rows": 10,
+            },
         )
 
         packages = result.get(
@@ -1257,20 +1169,19 @@ def search_msq_tide_package(
             [],
         )
 
-        # Prefer an exact title or package-name match.
+        if not packages:
+            continue
+
+        # Preferred exact match.
         for package in packages:
-            title = str(
-                package.get(
-                    "title",
-                    "",
-                )
+            title = package.get(
+                "title",
+                "",
             ).lower()
 
-            name = str(
-                package.get(
-                    "name",
-                    "",
-                )
+            name = package.get(
+                "name",
+                "",
             ).lower()
 
             if (
@@ -1290,129 +1201,91 @@ def search_msq_tide_package(
             ):
                 return package
 
-        # Broader match including the package resources.
+        # Broad fallback from the working notebook.
         for package in packages:
-            resource_text = " ".join(
-                " ".join(
-                    [
-                        str(
-                            resource.get(
-                                "name",
-                                "",
-                            )
-                        ),
-                        str(
-                            resource.get(
-                                "description",
-                                "",
-                            )
-                        ),
-                        str(
-                            resource.get(
-                                "url",
-                                "",
-                            )
-                        ),
-                    ]
-                )
-                for resource in package.get(
-                    "resources",
-                    [],
-                )
-            )
-
-            combined_text = " ".join(
-                [
-                    str(
-                        package.get(
-                            "title",
-                            "",
-                        )
-                    ),
-                    str(
-                        package.get(
-                            "name",
-                            "",
-                        )
-                    ),
-                    str(
-                        package.get(
-                            "notes",
-                            "",
-                        )
-                    ),
-                    resource_text,
-                ]
+            package_text = (
+                f"{package.get('title', '')} "
+                f"{package.get('notes', '')}"
             ).lower()
 
             if (
-                station_lower in combined_text
-                and "tide" in combined_text
-                and "predicted" in combined_text
+                "tide" in package_text
+                and "predicted" in package_text
             ):
                 return package
 
     raise RuntimeError(
-        "Could not find an MSQ predicted interval tide "
-        f"package for {station_name}."
+        "Could not find an MSQ predicted interval tide package "
+        f"for {station_name}."
     )
 
 
-#### TIDE RESOURCE SELECTION ###################################################
-
-def select_msq_tide_resource(
-    package: dict,
+def find_msq_predicted_interval_resource(
     station_name: str,
     year: int,
 ) -> TideResource:
     """
-    Select the annual predicted interval CSV/API resource.
+    Find the annual predicted interval CSV/API resource.
+
+    This follows the original notebook selection logic.
     """
+    package = search_msq_tide_package(
+        station_name
+    )
+
+    resources = package.get(
+        "resources",
+        [],
+    )
+
     year_text = str(
         year
     )
 
     candidates = []
 
-    for resource in package.get(
-        "resources",
-        [],
-    ):
+    for resource in resources:
+        name = str(
+            resource.get(
+                "name",
+                "",
+            )
+        )
+
+        description = str(
+            resource.get(
+                "description",
+                "",
+            )
+        )
+
+        resource_format = str(
+            resource.get(
+                "format",
+                "",
+            )
+        )
+
         resource_id = resource.get(
             "id"
         )
 
+        resource_url = str(
+            resource.get(
+                "url",
+                "",
+            )
+        )
+
+        resource_text = (
+            f"{name} "
+            f"{description} "
+            f"{resource_format} "
+            f"{resource_url}"
+        ).lower()
+
         if not resource_id:
             continue
-
-        resource_text = " ".join(
-            [
-                str(
-                    resource.get(
-                        "name",
-                        "",
-                    )
-                ),
-                str(
-                    resource.get(
-                        "description",
-                        "",
-                    )
-                ),
-                str(
-                    resource.get(
-                        "format",
-                        "",
-                    )
-                ),
-                str(
-                    resource.get(
-                        "url",
-                        "",
-                    )
-                ),
-            ]
-        ).lower()
 
         if year_text not in resource_text:
             continue
@@ -1435,44 +1308,16 @@ def select_msq_tide_resource(
 
     if not candidates:
         available_resources = "\n".join(
-            (
-                "  - "
-                + str(
-                    resource.get(
-                        "name",
-                        "Unnamed resource",
-                    )
-                )
-            )
-            for resource in package.get(
-                "resources",
-                [],
-            )
+            f"  - {resource.get('name', '')}"
+            for resource in resources
         )
 
         raise RuntimeError(
-            f"Could not find a {year} predicted interval "
+            f"Could not find a {year} predicted interval CSV/API "
             f"resource for {station_name}.\n\n"
             f"Available resources:\n"
             f"{available_resources}"
         )
-
-    # Prefer active CKAN datastore resources, then explicit CSV resources.
-    candidates.sort(
-        key=lambda resource: (
-            resource.get(
-                "datastore_active"
-            )
-            is not True,
-            "csv"
-            not in str(
-                resource.get(
-                    "format",
-                    "",
-                )
-            ).lower(),
-        )
-    )
 
     resource = candidates[
         0
@@ -1480,22 +1325,16 @@ def select_msq_tide_resource(
 
     return TideResource(
         station_name=station_name,
-        package_name=str(
-            package.get(
-                "name",
-                "",
-            )
+        package_name=package.get(
+            "name",
+            "",
         ),
-        resource_id=str(
-            resource[
-                "id"
-            ]
-        ),
-        resource_name=str(
-            resource.get(
-                "name",
-                "",
-            )
+        resource_id=resource[
+            "id"
+        ],
+        resource_name=resource.get(
+            "name",
+            "",
         ),
         year=year,
         url=resource.get(
@@ -1504,197 +1343,138 @@ def select_msq_tide_resource(
     )
 
 
-#### TIDE DOWNLOAD #############################################################
-
 def download_msq_tide_csv(
-    session: requests.Session,
     resource: TideResource,
 ) -> pd.DataFrame:
     """
-    Download one annual MSQ predicted interval tide resource.
+    Download an MSQ predicted interval tide CSV.
+
+    The datastore dump is attempted first, followed by the catalogue URL.
     """
-    candidate_urls = [
+    urls_to_try = [
         (
             f"{DATASTORE_DUMP_BASE}/"
-            f"{resource.resource_id}"
-            f"?format=csv"
-        )
+            f"{resource.resource_id}?format=csv"
+        ),
     ]
 
     if resource.url:
-        candidate_urls.append(
+        urls_to_try.append(
             resource.url
         )
 
-    candidate_urls = list(
-        dict.fromkeys(
-            candidate_urls
-        )
-    )
-
     errors = []
 
-    for url in candidate_urls:
+    for url in urls_to_try:
         try:
-            response = session.get(
+            response = requests.get(
                 url,
-                timeout=REQUEST_TIMEOUT_SECONDS,
+                timeout=90,
             )
 
             response.raise_for_status()
 
             text = response.text
 
-            lower_preview = text[
-                :5000
-            ].lower()
-
-            if not all(
-                column_name in lower_preview
-                for column_name in (
-                    "date",
-                    "time",
-                    "reading",
-                )
+            if (
+                "Date" not in text
+                or "Time" not in text
+                or "Reading" not in text
             ):
                 raise RuntimeError(
-                    "Response did not contain the expected "
-                    "Date, Time and Reading fields."
+                    "Response did not look like the expected MSQ "
+                    "tide CSV.\n\n"
+                    f"First 500 characters:\n{text[:500]}"
                 )
 
             return pd.read_csv(
                 StringIO(
                     text
-                ),
-                low_memory=False,
+                )
             )
 
         except Exception as error:
             errors.append(
-                f"{url}\n"
-                f"{type(error).__name__}: {error}"
+                f"{url}\n{error}"
             )
 
     raise RuntimeError(
-        "Failed to download the selected tide resource.\n\n"
+        "Failed to download MSQ tide CSV from all endpoints:\n\n"
         + "\n\n".join(
             errors
         )
     )
 
 
-#### TIDE COLUMN LOOKUP ########################################################
-
-def find_dataframe_column(
-    dataframe: pd.DataFrame,
-    possible_names: tuple[str, ...],
-) -> str:
-    """
-    Find a column name without requiring exact capitalisation.
-    """
-    normalised_columns = {
-        str(
-            column
-        ).strip().lower(): str(
-            column
-        )
-        for column in dataframe.columns
-    }
-
-    for possible_name in possible_names:
-        key = possible_name.strip().lower()
-
-        if key in normalised_columns:
-            return normalised_columns[
-                key
-            ]
-
-    raise KeyError(
-        f"Could not find any of {possible_names}.\n"
-        f"Available columns: {list(dataframe.columns)}"
-    )
-
-
-#### TIDE PARSING ##############################################################
-
 def parse_msq_tide_dataframe(
-    raw_dataframe: pd.DataFrame,
-    resource: TideResource,
+    raw_df: pd.DataFrame,
+    station_name: str,
 ) -> pd.DataFrame:
     """
-    Parse an MSQ predicted interval CSV into a timezone-aware series.
-    """
-    raw = raw_dataframe.copy()
+    Parse the predicted interval tide CSV.
 
-    raw.columns = [
+    Expected columns:
+        Date
+        Time
+        Reading
+    """
+    tide = raw_df.copy()
+
+    tide.columns = [
         str(
             column
         ).strip()
-        for column in raw.columns
+        for column in tide.columns
     ]
 
-    date_column = find_dataframe_column(
-        raw,
-        (
-            "Date",
-            "Prediction date",
-        ),
+    required_columns = {
+        "Date",
+        "Time",
+        "Reading",
+    }
+
+    missing_columns = (
+        required_columns
+        - set(
+            tide.columns
+        )
     )
 
-    time_column = find_dataframe_column(
-        raw,
-        (
-            "Time",
-            "Prediction time",
-        ),
-    )
-
-    reading_column = find_dataframe_column(
-        raw,
-        (
-            "Reading",
-            "Height",
-            "Water level",
-            "Predicted height",
-        ),
-    )
+    if missing_columns:
+        raise KeyError(
+            f"Missing expected MSQ columns: {missing_columns}.\n"
+            f"Columns found: {list(tide.columns)}"
+        )
 
     datetime_text = (
-        raw[
-            date_column
+        tide[
+            "Date"
         ]
         .astype(str)
         .str.strip()
         + " "
-        + raw[
-            time_column
+        + tide[
+            "Time"
         ]
         .astype(str)
         .str.strip()
     )
 
-    valid_time_local = pd.to_datetime(
+    tide[
+        "valid_time_local"
+    ] = pd.to_datetime(
         datetime_text,
         dayfirst=True,
         errors="coerce",
     )
 
-    tide_height = pd.to_numeric(
-        raw[
-            reading_column
+    tide[
+        "tide_height_m"
+    ] = pd.to_numeric(
+        tide[
+            "Reading"
         ],
         errors="coerce",
-    )
-
-    tide = pd.DataFrame(
-        {
-            "valid_time_local": (
-                valid_time_local
-            ),
-            "tide_height_m": (
-                tide_height
-            ),
-        }
     )
 
     tide = tide.dropna(
@@ -1702,12 +1482,11 @@ def parse_msq_tide_dataframe(
             "valid_time_local",
             "tide_height_m",
         ]
-    )
+    ).copy()
 
     if tide.empty:
         raise RuntimeError(
-            "The tide resource was downloaded, but no valid "
-            "tide records could be parsed."
+            "The MSQ tide CSV contained no valid tide records."
         )
 
     if tide[
@@ -1720,56 +1499,38 @@ def parse_msq_tide_dataframe(
                 "valid_time_local"
             ]
             .dt.tz_localize(
-                LOCAL_TIMEZONE
+                LOCAL_TZ
             )
         )
 
-    else:
-        tide[
-            "valid_time_local"
-        ] = (
-            tide[
-                "valid_time_local"
-            ]
-            .dt.tz_convert(
-                LOCAL_TIMEZONE
-            )
-        )
+    tide[
+        "station_name"
+    ] = station_name
 
-    tide["time_utc"] = (
-        tide[
-            "valid_time_local"
-        ]
-        .dt.tz_convert(
-            "UTC"
-        )
+    tide[
+        "tide_source"
+    ] = (
+        "MSQ Open Data predicted interval, BOM-produced"
     )
 
-    tide["station_name"] = (
-        resource.station_name
-    )
-
-    tide["resource_year"] = (
-        resource.year
-    )
-
-    tide["resource_id"] = (
-        resource.resource_id
-    )
-
-    tide["resource_name"] = (
-        resource.resource_name
+    tide[
+        "tide_method"
+    ] = (
+        "msq_10min_predicted_interval"
     )
 
     return (
-        tide
+        tide[
+            [
+                "station_name",
+                "valid_time_local",
+                "tide_height_m",
+                "tide_source",
+                "tide_method",
+            ]
+        ]
         .sort_values(
             "valid_time_local"
-        )
-        .drop_duplicates(
-            subset=[
-                "valid_time_local"
-            ]
         )
         .reset_index(
             drop=True
@@ -1777,16 +1538,22 @@ def parse_msq_tide_dataframe(
     )
 
 
-#### TIDE FORECAST COLLECTION ##################################################
-
 def get_msq_tide_for_wave_forecast(
     forecast: pd.DataFrame,
     station_name: str = TIDE_STATION,
 ) -> pd.DataFrame:
     """
-    Download tide data covering the GFS forecast period.
+    Download predicted tide data covering forecast["time_utc"].
+
+    This is the original notebook workflow, adapted only to return data
+    to the web pipeline instead of writing a CSV or tide-only plot.
     """
-    forecast_times = pd.to_datetime(
+    if "time_utc" not in forecast.columns:
+        raise KeyError(
+            "forecast must contain a 'time_utc' column."
+        )
+
+    forecast_times_utc = pd.to_datetime(
         forecast[
             "time_utc"
         ],
@@ -1794,15 +1561,15 @@ def get_msq_tide_for_wave_forecast(
         errors="coerce",
     ).dropna()
 
-    if forecast_times.empty:
+    if forecast_times_utc.empty:
         raise ValueError(
-            "The GFS forecast contains no valid timestamps."
+            "forecast['time_utc'] contains no valid timestamps."
         )
 
     start_time = (
-        forecast_times.min()
+        forecast_times_utc.min()
         .tz_convert(
-            LOCAL_TIMEZONE
+            LOCAL_TZ
         )
         .floor(
             "10min"
@@ -1810,99 +1577,152 @@ def get_msq_tide_for_wave_forecast(
     )
 
     end_time = (
-        forecast_times.max()
+        forecast_times_utc.max()
         .tz_convert(
-            LOCAL_TIMEZONE
+            LOCAL_TZ
         )
         .ceil(
             "10min"
         )
     )
 
-    required_years = range(
-        start_time.year,
-        end_time.year + 1,
+    years_needed = sorted(
+        {
+            start_time.year,
+            end_time.year,
+        }
     )
 
     tide_frames = []
 
-    with create_http_session() as session:
-        # Search the catalogue once, even if the forecast crosses a year.
-        package = search_msq_tide_package(
-            session=session,
+    for year in years_needed:
+        resource = find_msq_predicted_interval_resource(
+            station_name=station_name,
+            year=year,
+        )
+
+        raw_tide = download_msq_tide_csv(
+            resource
+        )
+
+        parsed_tide = parse_msq_tide_dataframe(
+            raw_df=raw_tide,
             station_name=station_name,
         )
 
-        for year in required_years:
-            resource = select_msq_tide_resource(
-                package=package,
-                station_name=station_name,
-                year=year,
-            )
+        parsed_tide[
+            "resource_id"
+        ] = resource.resource_id
 
-            raw_tide = download_msq_tide_csv(
-                session=session,
-                resource=resource,
-            )
+        parsed_tide[
+            "resource_name"
+        ] = resource.resource_name
 
-            tide_frames.append(
-                parse_msq_tide_dataframe(
-                    raw_dataframe=raw_tide,
-                    resource=resource,
-                )
-            )
+        parsed_tide[
+            "resource_year"
+        ] = year
+
+        tide_frames.append(
+            parsed_tide
+        )
 
     if not tide_frames:
         raise RuntimeError(
             "No tide data were downloaded."
         )
 
-    tide = pd.concat(
+    tide_df = pd.concat(
         tide_frames,
         ignore_index=True,
     )
 
-    tide = (
-        tide
-        .sort_values(
-            "valid_time_local"
-        )
+    tide_df = (
+        tide_df
         .drop_duplicates(
             subset=[
                 "valid_time_local"
             ]
         )
+        .sort_values(
+            "valid_time_local"
+        )
     )
 
-    tide = tide.loc[
-        tide[
-            "valid_time_local"
-        ].between(
-            start_time,
-            end_time,
-            inclusive="both",
+    tide_df = tide_df.loc[
+        (
+            tide_df[
+                "valid_time_local"
+            ]
+            >= start_time
+        )
+        & (
+            tide_df[
+                "valid_time_local"
+            ]
+            <= end_time
         )
     ].copy()
 
-    if tide.empty:
+    if tide_df.empty:
         raise RuntimeError(
-            "Tide data were downloaded successfully, but no "
-            "records overlap the GFS forecast period."
+            "Downloaded MSQ tide data successfully, but no rows "
+            "matched the forecast window.\n\n"
+            f"Start: {start_time}\n"
+            f"End: {end_time}"
         )
 
-    return tide.reset_index(
-        drop=True
+    tide_df[
+        "forecast_hour"
+    ] = (
+        tide_df[
+            "valid_time_local"
+        ]
+        - start_time
+    ).dt.total_seconds() / 3600.0
+
+    tide_df[
+        "time_utc"
+    ] = (
+        tide_df[
+            "valid_time_local"
+        ]
+        .dt.tz_convert(
+            "UTC"
+        )
+    )
+
+    return (
+        tide_df[
+            [
+                "station_name",
+                "valid_time_local",
+                "time_utc",
+                "forecast_hour",
+                "tide_height_m",
+                "tide_source",
+                "tide_method",
+                "resource_id",
+                "resource_name",
+                "resource_year",
+            ]
+        ]
+        .sort_values(
+            "valid_time_local"
+        )
+        .reset_index(
+            drop=True
+        )
     )
 
 
-#### DIRECTION SCORING HELPERS #################################################
+#### QUALITY SCORING ###########################################################
 
 def circular_distance_deg(
     angle_a,
     angle_b,
 ) -> np.ndarray:
     """
-    Return the smallest distance between circular bearings.
+    Return the smallest angular distance between bearings.
     """
     angle_a = np.asarray(
         angle_a,
@@ -1931,10 +1751,7 @@ def direction_in_sector(
     sector_end: float,
 ) -> np.ndarray:
     """
-    Test whether directions lie within a circular sector.
-
-    If sector_start is larger than sector_end, the sector wraps through
-    true north.
+    Test whether bearings lie within a circular sector.
     """
     direction = np.mod(
         np.asarray(
@@ -1958,8 +1775,6 @@ def direction_in_sector(
         | (direction <= sector_end)
     )
 
-
-#### WAVE-HEIGHT SCORE #########################################################
 
 def score_wave_height(
     height_m,
@@ -2006,8 +1821,6 @@ def score_wave_height(
 
     return scores
 
-
-#### WAVE-PERIOD SCORE #########################################################
 
 def score_wave_period(
     period_s,
@@ -2056,8 +1869,6 @@ def score_wave_period(
     return scores
 
 
-#### WAVE-DIRECTION SCORE ######################################################
-
 def score_wave_direction(
     direction_deg,
     good_start: float = 145.0,
@@ -2065,8 +1876,6 @@ def score_wave_direction(
 ) -> np.ndarray:
     """
     Score wave direction from 0 to 1.
-
-    The preferred sector wraps through north from 145° to 45°.
     """
     direction = np.asarray(
         direction_deg,
@@ -2112,8 +1921,6 @@ def score_wave_direction(
 
     return scores
 
-
-#### TIDE SCORE ################################################################
 
 def score_tide(
     tide_m,
@@ -2161,8 +1968,6 @@ def score_tide(
     return scores
 
 
-#### WIND-SPEED SCORE ##########################################################
-
 def score_wind_speed(
     wind_speed_knots,
 ) -> np.ndarray:
@@ -2199,15 +2004,11 @@ def score_wind_speed(
     return scores
 
 
-#### WIND-DIRECTION SCORE ######################################################
-
 def score_wind_direction(
     direction_deg,
 ) -> np.ndarray:
     """
     Score wind direction from 0 to 1.
-
-    Preferred winds are SE through S to SW: 135° to 225°.
     """
     direction = np.asarray(
         direction_deg,
@@ -2261,13 +2062,11 @@ def score_wind_direction(
     return scores
 
 
-#### RATING LABELS #############################################################
-
 def rating_from_score(
     scores,
 ) -> np.ndarray:
     """
-    Convert numerical quality scores to descriptive ratings.
+    Convert 0-100 scores to descriptive ratings.
     """
     values = np.asarray(
         scores,
@@ -2309,14 +2108,12 @@ def rating_from_score(
     return ratings
 
 
-#### QUALITY INPUT ALIGNMENT ###################################################
-
 def prepare_quality_inputs(
     forecast: pd.DataFrame,
     tide: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Match each GFS forecast time to the nearest tide prediction.
+    Match every GFS forecast time to the nearest 10-minute tide value.
     """
     forecast_data = forecast.copy()
 
@@ -2430,19 +2227,19 @@ def prepare_quality_inputs(
             f"{missing_tide_count} GFS forecast times."
         )
 
-    combined["time_local"] = (
+    combined[
+        "time_local"
+    ] = (
         combined[
             "time_utc"
         ]
         .dt.tz_convert(
-            LOCAL_TIMEZONE
+            LOCAL_TZ
         )
     )
 
     return combined
 
-
-#### QUALITY SCORING ###########################################################
 
 def score_forecast_times(
     forecast: pd.DataFrame,
@@ -2450,9 +2247,7 @@ def score_forecast_times(
     weights: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """
-    Calculate the quality score for every GFS forecast time.
-
-    All score calculations are vectorised.
+    Calculate vectorised surf-quality scores.
     """
     if weights is None:
         weights = QUALITY_WEIGHTS
@@ -2494,7 +2289,7 @@ def score_forecast_times(
         or weight_values.sum() <= 0
     ):
         raise ValueError(
-            "Quality weights must be finite, non-negative, "
+            "Quality weights must be finite, non-negative "
             "and have a positive total."
         )
 
@@ -2564,14 +2359,14 @@ def score_forecast_times(
         * 100.0
     )
 
-    result["quality_score"] = (
-        quality_scores
-    )
+    result[
+        "quality_score"
+    ] = quality_scores
 
-    result["rating"] = (
-        rating_from_score(
-            quality_scores
-        )
+    result[
+        "rating"
+    ] = rating_from_score(
+        quality_scores
     )
 
     result[
@@ -2593,13 +2388,13 @@ def score_forecast_times(
     return result
 
 
-#### FORECAST PLOT DATA ########################################################
+#### FINAL PLOT DATA ###########################################################
 
 def prepare_forecast_plot_data(
     quality_forecast: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Prepare combined wave, wind, tide and rating values for plotting.
+    Prepare aligned wave, wind, tide and rating data for plotting.
     """
     required_columns = {
         "time_local",
@@ -2641,7 +2436,7 @@ def prepare_forecast_plot_data(
         plot_times = (
             plot_times
             .dt.tz_localize(
-                LOCAL_TIMEZONE
+                LOCAL_TZ
             )
         )
 
@@ -2649,13 +2444,13 @@ def prepare_forecast_plot_data(
         plot_times = (
             plot_times
             .dt.tz_convert(
-                LOCAL_TIMEZONE
+                LOCAL_TZ
             )
         )
 
-    data["plot_time"] = (
-        plot_times
-    )
+    data[
+        "plot_time"
+    ] = plot_times
 
     numeric_columns = [
         "nearshore_wave_height_m",
@@ -2706,19 +2501,19 @@ def prepare_forecast_plot_data(
     return data
 
 
-#### FULL-RESOLUTION TIDE PLOT DATA ############################################
-
 def prepare_tide_plot_data(
     tide: pd.DataFrame,
     start_time: pd.Timestamp,
     end_time: pd.Timestamp,
 ) -> pd.DataFrame:
     """
-    Prepare the original 10-minute tide series for the final plot.
+    Prepare the original 10-minute tide series for plotting.
     """
     data = tide.copy()
 
-    data["plot_time"] = (
+    data[
+        "plot_time"
+    ] = (
         pd.to_datetime(
             data[
                 "time_utc"
@@ -2727,7 +2522,7 @@ def prepare_tide_plot_data(
             errors="coerce",
         )
         .dt.tz_convert(
-            LOCAL_TIMEZONE
+            LOCAL_TZ
         )
     )
 
@@ -2788,13 +2583,13 @@ def prepare_tide_plot_data(
     return data
 
 
-#### PLOT TIME HELPERS #########################################################
+#### PLOT HELPERS ##############################################################
 
 def calculate_time_edges(
     times: pd.Series,
 ) -> pd.DatetimeIndex:
     """
-    Calculate the time interval represented by each forecast record.
+    Calculate interval edges around each GFS forecast timestamp.
     """
     timestamps = pd.DatetimeIndex(
         pd.to_datetime(
@@ -2880,7 +2675,7 @@ def calculate_bar_width_days(
     times: pd.Series,
 ) -> float:
     """
-    Calculate a suitable bar width from the GFS interval.
+    Calculate a suitable bar width from the forecast interval.
     """
     time_numbers = mdates.date2num(
         pd.to_datetime(
@@ -2911,7 +2706,7 @@ def choose_annotation_step(
     number_of_points: int,
 ) -> int:
     """
-    Thin direction annotations automatically to avoid overlapping text.
+    Thin direction annotations to avoid overlaps.
     """
     return max(
         1,
@@ -2924,8 +2719,6 @@ def choose_annotation_step(
     )
 
 
-#### QUALITY COLOUR STRIP ######################################################
-
 def plot_quality_strip(
     axis: plt.Axes,
     times: pd.Series,
@@ -2934,7 +2727,7 @@ def plot_quality_strip(
     cycle: str,
 ) -> None:
     """
-    Plot the red-yellow-green surf-quality strip.
+    Plot a red-yellow-green quality strip.
     """
     scores = np.asarray(
         quality_scores,
@@ -2949,16 +2742,6 @@ def plot_quality_strip(
         time_edges.to_pydatetime()
     )
 
-    colour_map = plt.get_cmap(
-        QUALITY_COLOUR_MAP
-    )
-
-    normaliser = Normalize(
-        vmin=0.0,
-        vmax=100.0,
-        clip=True,
-    )
-
     axis.pcolormesh(
         numeric_edges,
         np.array(
@@ -2971,8 +2754,14 @@ def plot_quality_strip(
             1,
             -1,
         ),
-        cmap=colour_map,
-        norm=normaliser,
+        cmap=plt.get_cmap(
+            QUALITY_COLOUR_MAP
+        ),
+        norm=Normalize(
+            vmin=0.0,
+            vmax=100.0,
+            clip=True,
+        ),
         shading="flat",
         rasterized=False,
     )
@@ -3021,8 +2810,6 @@ def plot_quality_strip(
         )
 
 
-#### DIRECTION ANNOTATIONS #####################################################
-
 def add_direction_annotations(
     axis: plt.Axes,
     times: pd.Series,
@@ -3031,10 +2818,7 @@ def add_direction_annotations(
     annotation_step: int,
 ) -> None:
     """
-    Add a reserved row of direction arrows and compass labels.
-
-    Arrows point in the direction of travel. Compass labels show the
-    direction from which the wave or wind originates.
+    Add non-overlapping travel arrows and source-direction labels.
     """
     transform = blended_transform_factory(
         axis.transData,
@@ -3102,13 +2886,11 @@ def add_direction_annotations(
         )
 
 
-#### PLOT STYLING ##############################################################
-
 def style_primary_axis(
     axis: plt.Axes,
 ) -> None:
     """
-    Apply consistent publication-style axis formatting.
+    Apply consistent publication-style formatting.
     """
     axis.grid(
         axis="y",
@@ -3178,12 +2960,12 @@ def plot_publication_surf_forecast(
     output_path: Path,
 ) -> plt.Figure:
     """
-    Create and save the final browser-ready forecast plot.
+    Create the final browser-ready surf forecast.
 
     Layout:
-        Surf-quality strip
-        Wave height, period and direction
-        Wind speed and direction
+        Quality strip
+        Waves: transformed height, primary period and direction
+        Wind: speed and direction
         Full-resolution tide
     """
     tide_data = prepare_tide_plot_data(
@@ -3269,8 +3051,6 @@ def plot_publication_surf_forecast(
         fontsize=18,
         fontweight="semibold",
     )
-
-    #### QUALITY ###############################################################
 
     plot_quality_strip(
         axis=quality_axis,
@@ -3606,8 +3386,6 @@ def plot_publication_surf_forecast(
         ]
     )
 
-    #### SAVE ##################################################################
-
     output_path = Path(
         output_path
     )
@@ -3660,23 +3438,7 @@ def generate_final_plot(
     output_path: str | Path,
 ) -> Path:
     """
-    Run the complete forecast pipeline and save only the final plot.
-
-    Parameters
-    ----------
-    date_string:
-        GFS run date in YYYYMMDD format.
-
-    cycle:
-        GFS cycle hour: 00, 06, 12 or 18.
-
-    output_path:
-        Final SVG or PNG destination.
-
-    Returns
-    -------
-    pathlib.Path
-        The completed final plot path.
+    Run the full pipeline and save only the final SVG or PNG.
     """
     output_path = Path(
         output_path
@@ -3729,8 +3491,6 @@ def generate_final_plot(
 
     return output_path
 
-
-#### EXPORTED FUNCTIONS ########################################################
 
 __all__ = [
     "generate_final_plot",
