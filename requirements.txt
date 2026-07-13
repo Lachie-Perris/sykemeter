@@ -1,0 +1,8 @@
+requests>=2.32,<3
+urllib3>=2.2,<3
+numpy>=2.0,<3
+pandas>=2.2,<4
+matplotlib>=3.9,<4
+xarray>=2025.1,<2027
+cfgrib>=0.9.15,<0.10
+eccodes>=2.39,<3
