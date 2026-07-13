@@ -1,0 +1,104 @@
+name: Update surf forecast
+
+on:
+  schedule:
+    # Check at minute 23 of every hour.
+    # The full forecast only runs when the GFS cycle changes.
+    - cron: "23 * * * *"
+
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: "Regenerate the current GFS cycle"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: surf-forecast-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    env:
+      MPLBACKEND: Agg
+      PYTHONUNBUFFERED: "1"
+      FORCE_UPDATE: >-
+        ${{ github.event_name == 'workflow_dispatch'
+            && inputs.force_update
+            || false }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Check latest complete GFS cycle
+        id: cycle
+        run: python3 check_cycle.py
+
+      - name: Set up Python
+        if: steps.cycle.outputs.needs_update == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        if: steps.cycle.outputs.needs_update == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m cfgrib selfcheck
+
+      - name: Generate final forecast SVG
+        if: steps.cycle.outputs.needs_update == 'true'
+        run: |
+          python generate_site.py \
+            --date "${{ steps.cycle.outputs.date_string }}" \
+            --cycle "${{ steps.cycle.outputs.cycle }}"
+
+      - name: Configure GitHub Pages
+        if: steps.cycle.outputs.needs_update == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        if: steps.cycle.outputs.needs_update == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs
+
+      - name: Deploy website
+        if: steps.cycle.outputs.needs_update == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+      - name: Save generated forecast to repository
+        if: steps.cycle.outputs.needs_update == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            docs/final_surf_forecast.svg \
+            .forecast_state/latest_gfs_cycle.txt
+
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+          else
+            git commit -m \
+              "Update forecast ${{ steps.cycle.outputs.cycle_key }}"
+            git pull --rebase origin main
+            git push origin main
+          fi
