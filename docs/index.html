@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <!-- Reload the webpage every 15 minutes. -->
+    <meta
+        http-equiv="refresh"
+        content="900"
+    >
+
+    <meta
+        name="description"
+        content="Automated seven-day Heron Island surf forecast."
+    >
+
+    <title>Heron Island Surf Forecast</title>
+
+    <style>
+        :root {
+            color-scheme: light;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+            background: #eef1f4;
+        }
+
+        body {
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+        }
+
+        main {
+            width: min(100%, 2200px);
+            margin: 0 auto;
+            padding: 14px;
+        }
+
+        .forecast-frame {
+            overflow: hidden;
+            background: #ffffff;
+            border-radius: 6px;
+            box-shadow:
+                0 1px 3px rgba(0, 0, 0, 0.08),
+                0 10px 32px rgba(0, 0, 0, 0.07);
+        }
+
+        #forecast {
+            display: block;
+            width: 100%;
+            height: auto;
+            min-height: 300px;
+            background: #ffffff;
+        }
+
+        @media (max-width: 700px) {
+            main {
+                padding: 4px;
+            }
+
+            .forecast-frame {
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <div class="forecast-frame">
+            <img
+                id="forecast"
+                src="final_surf_forecast.svg"
+                alt="Current seven-day Heron Island surf forecast"
+            >
+        </div>
+    </main>
+
+    <script>
+        /*
+         * Add a timestamp to prevent the browser from showing
+         * a previously cached forecast after the SVG is updated.
+         */
+        const forecastImage =
+            document.getElementById("forecast");
+
+        forecastImage.src =
+            "final_surf_forecast.svg?v=" +
+            Date.now();
+    </script>
+</body>
+</html>
