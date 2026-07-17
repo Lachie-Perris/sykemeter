@@ -58,7 +58,7 @@ TRANSFER_MATRIX_PATH = (
 
 #### LOCATION CONFIGURATION ####################################################
 
-SPOT_NAME = "Heron Island Surf Forecast"
+SPOT_NAME = "Sykemeter"
 
 SPOT_LAT = -23.348043530796062
 SPOT_LON = 152.618531665867
@@ -70,6 +70,8 @@ GFS_GRID_LON = 152.50
 LOCAL_TZ = "Australia/Brisbane"
 LOCAL_TZ_INFO = ZoneInfo(LOCAL_TZ)
 
+# Internal catalogue query required by the working tide method.
+# This label is not displayed on the public figure.
 TIDE_STATION = "Heron Island"
 
 
@@ -282,7 +284,7 @@ def create_http_session() -> requests.Session:
     session.headers.update(
         {
             "User-Agent": (
-                "Heron Island automated surf forecast"
+                "Sykemeter automated surf forecast"
             ),
         }
     )
@@ -2204,22 +2206,6 @@ def prepare_quality_inputs(
             drop=True
         )
     )
-    # pandas 3 may preserve different datetime resolutions depending on
-    # the original data source. merge_asof requires identical key dtypes.
-    utc_nanosecond_dtype = pd.DatetimeTZDtype(
-        unit="ns",
-        tz="UTC",
-    )
-
-    forecast_data["time_utc"] = (
-        forecast_data["time_utc"]
-        .astype(utc_nanosecond_dtype)
-    )
-
-    tide_data["time_utc"] = (
-        tide_data["time_utc"]
-        .astype(utc_nanosecond_dtype)
-    )
 
     combined = pd.merge_asof(
         forecast_data,
@@ -2976,9 +2962,10 @@ def plot_publication_surf_forecast(
     output_path: Path,
 ) -> plt.Figure:
     """
-    Create the final browser-ready surf forecast.
+    Create the final browser-ready Sykemeter forecast.
 
     Layout:
+        Current conditions header
         Quality strip
         Waves: transformed height, primary period and direction
         Wind: speed and direction
@@ -3012,61 +2999,285 @@ def plot_publication_surf_forecast(
         )
     )
 
+    def get_current_conditions_summary() -> dict[str, object]:
+        """
+        Build the current-conditions summary from the first forecast time
+        and the nearest full-resolution tide value.
+        """
+        current_row = (
+            forecast_data
+            .sort_values(
+                "plot_time"
+            )
+            .iloc[0]
+        )
+
+        reference_time = pd.Timestamp(
+            current_row[
+                "plot_time"
+            ]
+        )
+
+        tide_time_offsets = np.abs(
+            (
+                tide_data[
+                    "plot_time"
+                ]
+                - reference_time
+            )
+            .dt.total_seconds()
+            .to_numpy()
+        )
+
+        nearest_tide_index = int(
+            np.argmin(
+                tide_time_offsets
+            )
+        )
+
+        current_tide_height = float(
+            tide_data[
+                "tide_height_m"
+            ].iloc[
+                nearest_tide_index
+            ]
+        )
+
+        if len(
+            tide_data
+        ) == 1:
+            tide_trend_arrow = "→"
+            tide_trend_text = "Steady"
+
+        else:
+            if nearest_tide_index == 0:
+                tide_trend_change = (
+                    float(
+                        tide_data[
+                            "tide_height_m"
+                        ].iloc[1]
+                    )
+                    - current_tide_height
+                )
+
+            elif nearest_tide_index == len(
+                tide_data
+            ) - 1:
+                tide_trend_change = (
+                    current_tide_height
+                    - float(
+                        tide_data[
+                            "tide_height_m"
+                        ].iloc[-2]
+                    )
+                )
+
+            else:
+                tide_trend_change = (
+                    float(
+                        tide_data[
+                            "tide_height_m"
+                        ].iloc[
+                            nearest_tide_index + 1
+                        ]
+                    )
+                    - float(
+                        tide_data[
+                            "tide_height_m"
+                        ].iloc[
+                            nearest_tide_index - 1
+                        ]
+                    )
+                )
+
+            if tide_trend_change > 0:
+                tide_trend_arrow = "↑"
+                tide_trend_text = "Rising"
+
+            elif tide_trend_change < 0:
+                tide_trend_arrow = "↓"
+                tide_trend_text = "Falling"
+
+            else:
+                tide_trend_arrow = "→"
+                tide_trend_text = "Steady"
+
+        return {
+            "time_text": (
+                f"Current conditions · "
+                f"{reference_time:%a %d %b %H:%M %Z}"
+            ),
+            "wave_height_text": (
+                f"{float(current_row['nearshore_wave_height_m']):.2f} m"
+            ),
+            "rating_text": str(
+                current_row[
+                    "rating"
+                ]
+            ),
+            "swell_text": (
+                f"{float(current_row['wave_period_s']):.1f} s "
+                f"from {current_row['wave_direction_compass']}"
+            ),
+            "wind_text": (
+                f"{float(current_row['wind_speed_knots']):.1f} kt "
+                f"from {current_row['wind_direction_compass']}"
+            ),
+            "tide_text": (
+                f"{current_tide_height:.2f} m "
+                f"{tide_trend_arrow} {tide_trend_text}"
+            ),
+        }
+
+    current_conditions = get_current_conditions_summary()
+
     figure = plt.figure(
         figsize=(
             18,
-            10,
+            10.8,
         ),
         layout="constrained",
         facecolor="white",
     )
 
     grid = figure.add_gridspec(
-        nrows=4,
+        nrows=5,
         ncols=1,
         height_ratios=[
+            1.05,
             0.34,
-            3.5,
-            2.15,
+            3.40,
+            2.10,
             1.85,
         ],
         hspace=0.04,
     )
 
-    quality_axis = figure.add_subplot(
+    header_axis = figure.add_subplot(
         grid[
             0
         ]
     )
 
-    wave_axis = figure.add_subplot(
+    quality_axis = figure.add_subplot(
         grid[
             1
-        ],
-        sharex=quality_axis,
+        ]
     )
 
-    wind_axis = figure.add_subplot(
+    wave_axis = figure.add_subplot(
         grid[
             2
         ],
         sharex=quality_axis,
     )
 
-    tide_axis = figure.add_subplot(
+    wind_axis = figure.add_subplot(
         grid[
             3
         ],
         sharex=quality_axis,
     )
 
-    figure.suptitle(
-        f"{SPOT_NAME} — seven-day surf forecast",
-        x=0.065,
-        ha="left",
-        fontsize=18,
-        fontweight="semibold",
+    tide_axis = figure.add_subplot(
+        grid[
+            4
+        ],
+        sharex=quality_axis,
     )
+
+    #### HEADER ###############################################################
+
+    header_axis.axis(
+        "off"
+    )
+
+    header_axis.text(
+        0.00,
+        0.98,
+        SPOT_NAME,
+        ha="left",
+        va="top",
+        fontsize=23,
+        fontweight="bold",
+    )
+
+    header_axis.text(
+        0.00,
+        0.72,
+        current_conditions[
+            "time_text"
+        ],
+        ha="left",
+        va="top",
+        fontsize=10,
+    )
+
+    header_blocks = [
+        (
+            "Wave height",
+            current_conditions[
+                "wave_height_text"
+            ],
+            0.00,
+            18,
+        ),
+        (
+            "Rating",
+            current_conditions[
+                "rating_text"
+            ],
+            0.18,
+            18,
+        ),
+        (
+            "Swell",
+            current_conditions[
+                "swell_text"
+            ],
+            0.40,
+            15,
+        ),
+        (
+            "Wind",
+            current_conditions[
+                "wind_text"
+            ],
+            0.64,
+            15,
+        ),
+        (
+            "Tide",
+            current_conditions[
+                "tide_text"
+            ],
+            0.84,
+            15,
+        ),
+    ]
+
+    for label, value, x_position, value_size in header_blocks:
+        header_axis.text(
+            x_position,
+            0.34,
+            label,
+            ha="left",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+        )
+
+        header_axis.text(
+            x_position,
+            0.06,
+            value,
+            ha="left",
+            va="bottom",
+            fontsize=value_size,
+            fontweight="semibold",
+        )
+
+    #### QUALITY ##############################################################
 
     plot_quality_strip(
         axis=quality_axis,
@@ -3078,7 +3289,7 @@ def plot_publication_surf_forecast(
         cycle=cycle,
     )
 
-    #### WAVES #################################################################
+    #### WAVES ################################################################
 
     wave_height = forecast_data[
         "nearshore_wave_height_m"
@@ -3204,7 +3415,7 @@ def plot_publication_surf_forecast(
         columnspacing=1.4,
     )
 
-    #### WIND ##################################################################
+    #### WIND #################################################################
 
     wind_speed = forecast_data[
         "wind_speed_knots"
@@ -3274,7 +3485,7 @@ def plot_publication_surf_forecast(
         frameon=False,
     )
 
-    #### TIDE ##################################################################
+    #### TIDE #################################################################
 
     tide_height = tide_data[
         "tide_height_m"
@@ -3323,7 +3534,7 @@ def plot_publication_surf_forecast(
         frameon=False,
     )
 
-    #### SHARED TIME AXIS ######################################################
+    #### SHARED TIME AXIS #####################################################
 
     tide_axis.xaxis.set_major_locator(
         mdates.DayLocator(
@@ -3401,6 +3612,8 @@ def plot_publication_surf_forecast(
             tide_axis,
         ]
     )
+
+    #### SAVE #################################################################
 
     output_path = Path(
         output_path
