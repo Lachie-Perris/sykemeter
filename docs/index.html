@@ -8,7 +8,6 @@
         content="width=device-width, initial-scale=1"
     >
 
-    <!-- Reload the webpage every 15 minutes. -->
     <meta
         http-equiv="refresh"
         content="900"
@@ -16,10 +15,10 @@
 
     <meta
         name="description"
-        content="Automated seven-day Heron Island surf forecast."
+        content="Sykemeter automated seven-day wave, wind and tide forecast."
     >
 
-    <title>Heron Island Surf Forecast</title>
+    <title>Sykemeter</title>
 
     <style>
         :root {
@@ -85,16 +84,12 @@
             <img
                 id="forecast"
                 src="final_surf_forecast.svg"
-                alt="Current seven-day Heron Island surf forecast"
+                alt="Current Sykemeter forecast"
             >
         </div>
     </main>
 
     <script>
-        /*
-         * Add a timestamp to prevent the browser from showing
-         * a previously cached forecast after the SVG is updated.
-         */
         const forecastImage =
             document.getElementById("forecast");
 
