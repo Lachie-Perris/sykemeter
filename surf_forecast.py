@@ -2207,6 +2207,23 @@ def prepare_quality_inputs(
         )
     )
 
+    # pandas may retain different datetime resolutions for GFS and tide
+    # timestamps. merge_asof requires both keys to have identical dtypes.
+    utc_nanosecond_dtype = pd.DatetimeTZDtype(
+        unit="ns",
+        tz="UTC",
+    )
+
+    forecast_data["time_utc"] = (
+        forecast_data["time_utc"]
+        .astype(utc_nanosecond_dtype)
+    )
+
+    tide_data["time_utc"] = (
+        tide_data["time_utc"]
+        .astype(utc_nanosecond_dtype)
+    )
+
     combined = pd.merge_asof(
         forecast_data,
         tide_data,
