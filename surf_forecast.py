@@ -37,6 +37,7 @@ import cfgrib
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
+from matplotlib.patches import FancyBboxPatch
 from matplotlib.transforms import blended_transform_factory
 import numpy as np
 import pandas as pd
@@ -109,20 +110,26 @@ DATASTORE_DUMP_BASE = (
 
 #### PLOT CONFIGURATION ########################################################
 
-MAX_DIRECTION_ANNOTATIONS = 20
+MAX_DIRECTION_ANNOTATIONS = 16
 QUALITY_COLOUR_MAP = "RdYlGn"
+WAVE_HEIGHT_COLOUR = "#137a7f"
+WAVE_PERIOD_COLOUR = "#d95f59"
+WIND_COLOUR = "#3366a3"
+TIDE_COLOUR = "#2f5d62"
+HEADER_CARD_FACE = "#f6f8fa"
+HEADER_CARD_EDGE = "#d7dee5"
 
 plt.rcParams.update(
     {
         "font.family": "DejaVu Sans",
-        "font.size": 10,
-        "axes.titlesize": 12,
+        "font.size": 11,
+        "axes.titlesize": 13,
         "axes.titleweight": "semibold",
-        "axes.labelsize": 10,
+        "axes.labelsize": 11,
         "axes.linewidth": 0.8,
-        "xtick.labelsize": 9,
-        "ytick.labelsize": 9,
-        "legend.fontsize": 9,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 10,
         "lines.linewidth": 1.8,
         "grid.linewidth": 0.6,
         "grid.alpha": 0.25,
@@ -2808,7 +2815,7 @@ def plot_quality_strip(
     )
 
     axis.set_title(
-        "Surf quality · red = low · yellow = moderate · green = high",
+        "Surf quality - red = low - yellow = moderate - green = high",
         loc="left",
         fontsize=9,
         fontweight="normal",
@@ -3150,8 +3157,8 @@ def plot_publication_surf_forecast(
 
     figure = plt.figure(
         figsize=(
-            18,
-            10.8,
+            12.4,
+            13.8,
         ),
         layout="constrained",
         facecolor="white",
@@ -3161,13 +3168,13 @@ def plot_publication_surf_forecast(
         nrows=5,
         ncols=1,
         height_ratios=[
-            1.05,
+            1.80,
             0.34,
-            3.40,
-            2.10,
-            1.85,
+            3.70,
+            2.55,
+            2.15,
         ],
-        hspace=0.04,
+        hspace=0.055,
     )
 
     header_axis = figure.add_subplot(
@@ -3215,19 +3222,20 @@ def plot_publication_surf_forecast(
         SPOT_NAME,
         ha="left",
         va="top",
-        fontsize=23,
+        fontsize=30,
         fontweight="bold",
     )
 
     header_axis.text(
         0.00,
-        0.72,
+        0.80,
         current_conditions[
             "time_text"
         ],
         ha="left",
         va="top",
-        fontsize=10,
+        fontsize=12,
+        color="#465463",
     )
 
     header_blocks = [
@@ -3237,22 +3245,31 @@ def plot_publication_surf_forecast(
                 "wave_height_text"
             ],
             0.00,
-            18,
+            0.46,
+            0.37,
+            0.27,
+            23,
         ),
         (
             "Rating",
             current_conditions[
                 "rating_text"
             ],
-            0.18,
-            18,
+            0.51,
+            0.46,
+            0.37,
+            0.27,
+            23,
         ),
         (
             "Swell",
             current_conditions[
                 "swell_text"
             ],
-            0.40,
+            0.00,
+            0.13,
+            0.31,
+            0.24,
             15,
         ),
         (
@@ -3260,7 +3277,10 @@ def plot_publication_surf_forecast(
             current_conditions[
                 "wind_text"
             ],
-            0.64,
+            0.34,
+            0.13,
+            0.31,
+            0.24,
             15,
         ),
         (
@@ -3268,30 +3288,68 @@ def plot_publication_surf_forecast(
             current_conditions[
                 "tide_text"
             ],
-            0.84,
+            0.68,
+            0.13,
+            0.32,
+            0.24,
             15,
         ),
     ]
 
-    for label, value, x_position, value_size in header_blocks:
-        header_axis.text(
-            x_position,
-            0.34,
-            label,
-            ha="left",
-            va="bottom",
-            fontsize=9,
-            fontweight="bold",
+    for (
+        label,
+        value,
+        x_position,
+        y_position,
+        width,
+        height,
+        value_size,
+    ) in header_blocks:
+        header_axis.add_patch(
+            FancyBboxPatch(
+                (
+                    x_position,
+                    y_position,
+                ),
+                width,
+                height,
+                boxstyle="round,pad=0.012,rounding_size=0.018",
+                transform=header_axis.transAxes,
+                linewidth=0.7,
+                edgecolor=HEADER_CARD_EDGE,
+                facecolor=HEADER_CARD_FACE,
+                zorder=1,
+            )
         )
 
         header_axis.text(
-            x_position,
-            0.06,
+            x_position
+            + 0.018,
+            y_position
+            + height
+            - 0.035,
+            label,
+            ha="left",
+            va="top",
+            fontsize=9,
+            fontweight="bold",
+            color="#465463",
+            zorder=2,
+        )
+
+        header_axis.text(
+            x_position
+            + 0.018,
+            y_position
+            + height
+            * 0.40,
             value,
             ha="left",
-            va="bottom",
+            va="center",
             fontsize=value_size,
             fontweight="semibold",
+            color="#111820",
+            zorder=2,
         )
 
     #### QUALITY ##############################################################
@@ -3327,6 +3385,7 @@ def plot_publication_surf_forecast(
         times,
         wave_height,
         width=bar_width,
+        color=WAVE_HEIGHT_COLOUR,
         alpha=0.72,
         label="Nearshore wave height",
         zorder=3,
@@ -3335,6 +3394,7 @@ def plot_publication_surf_forecast(
     wave_axis.plot(
         times,
         wave_height,
+        color=WAVE_HEIGHT_COLOUR,
         linewidth=1.25,
         zorder=4,
     )
@@ -3376,6 +3436,7 @@ def plot_publication_surf_forecast(
         marker="o",
         markersize=3.2,
         linewidth=1.8,
+        color=WAVE_PERIOD_COLOUR,
         label="Primary wave period",
         zorder=5,
     )
@@ -3424,7 +3485,7 @@ def plot_publication_surf_forecast(
         loc="upper left",
         bbox_to_anchor=(
             0.0,
-            0.70,
+            1.02,
         ),
         ncol=2,
         frameon=False,
@@ -3449,6 +3510,7 @@ def plot_publication_surf_forecast(
         times,
         wind_speed,
         width=bar_width,
+        color=WIND_COLOUR,
         alpha=0.65,
         label="Wind speed",
         zorder=3,
@@ -3457,6 +3519,7 @@ def plot_publication_surf_forecast(
     wind_axis.plot(
         times,
         wind_speed,
+        color=WIND_COLOUR,
         linewidth=1.2,
         zorder=4,
     )
@@ -3497,7 +3560,7 @@ def plot_publication_surf_forecast(
         loc="upper left",
         bbox_to_anchor=(
             0.0,
-            0.70,
+            1.02,
         ),
         frameon=False,
     )
@@ -3517,6 +3580,7 @@ def plot_publication_surf_forecast(
             "plot_time"
         ],
         tide_height,
+        color=TIDE_COLOUR,
         linewidth=1.9,
         label="Predicted tide",
         zorder=4,
@@ -3528,6 +3592,7 @@ def plot_publication_surf_forecast(
         ],
         tide_height,
         tide_baseline,
+        color=TIDE_COLOUR,
         alpha=0.20,
         zorder=2,
     )
@@ -3584,7 +3649,7 @@ def plot_publication_surf_forecast(
     )
 
     tide_axis.set_xlabel(
-        "Local time — Australia/Brisbane"
+        "Local time - Australia/Brisbane"
     )
 
     wave_axis.tick_params(
