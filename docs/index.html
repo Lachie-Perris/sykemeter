@@ -49,6 +49,29 @@
             padding: 14px;
         }
 
+        h1,
+        h2,
+        p {
+            margin-top: 0;
+        }
+
+        h1 {
+            font-size: clamp(1.7rem, 3vw, 2.6rem);
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            font-size: clamp(1.2rem, 2vw, 1.7rem);
+            margin-bottom: 8px;
+        }
+
+        p {
+            color: #26313b;
+            font-size: 1rem;
+            line-height: 1.55;
+            max-width: 980px;
+        }
+
         .forecast-frame {
             overflow: hidden;
             background: #ffffff;
@@ -66,6 +89,48 @@
             background: #ffffff;
         }
 
+        .method {
+            margin-top: 26px;
+            padding: 28px;
+            background: #ffffff;
+            border-radius: 6px;
+            box-shadow:
+                0 1px 3px rgba(0, 0, 0, 0.08),
+                0 10px 32px rgba(0, 0, 0, 0.06);
+        }
+
+        .method-grid {
+            display: grid;
+            gap: 24px;
+            margin-top: 18px;
+        }
+
+        .figure-block {
+            margin: 0;
+        }
+
+        .figure-block img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border: 1px solid #d7dee5;
+            border-radius: 4px;
+            background: #ffffff;
+        }
+
+        .figure-block figcaption {
+            margin-top: 8px;
+            color: #465463;
+            font-size: 0.92rem;
+            line-height: 1.45;
+        }
+
+        .figure-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px;
+        }
+
         @media (max-width: 700px) {
             main {
                 padding: 4px;
@@ -73,6 +138,16 @@
 
             .forecast-frame {
                 border-radius: 0;
+            }
+
+            .method {
+                margin-top: 10px;
+                padding: 18px 14px;
+                border-radius: 0;
+            }
+
+            .figure-row {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -87,6 +162,78 @@
                 alt="Current Sykemeter forecast"
             >
         </div>
+
+        <section class="method" aria-labelledby="matrix-method-heading">
+            <h1 id="matrix-method-heading">SWAN-Derived Wave Transfer Matrix</h1>
+
+            <p>
+                The GFS Wave forecast above is shown without modification. To estimate
+                conditions at the surf spot, Sykemeter applies a SWAN-derived transfer
+                matrix built from representative offshore wave cases near One Tree
+                Island South.
+            </p>
+
+            <p>
+                Historic wave records were filtered for outliers and reduced to 15
+                representative sea states using a maximum-dissimilarity algorithm. The
+                selected cases preserve spread in wave height, peak period and circular
+                wave direction, with K-means averages retained as a comparison. Each
+                MDA case was then used as offshore forcing for SWAN over the rotated
+                local bathymetry grid. At the surf spot, grid row 75 and grid column
+                22, the transfer coefficient is calculated as spot Hs divided by
+                offshore Hs. The operational 24 by 18 matrix is filled between modelled
+                cases using periodic inverse-distance interpolation over circular
+                direction and log-scaled peak period.
+            </p>
+
+            <div class="method-grid">
+                <figure class="figure-block">
+                    <img
+                        src="assets/oti_south_historic_polar_wave_conditions.png"
+                        alt="Polar plot of One Tree Island South wave conditions with MDA cases and K-means averages"
+                    >
+                    <figcaption>
+                        MDA representative cases selected from the historic OTI South
+                        wave record, compared with K-means averages.
+                    </figcaption>
+                </figure>
+
+                <figure class="figure-block">
+                    <img
+                        src="assets/all_mda_cases_bathymetry_hsign_atlas.png"
+                        alt="Bathymetry panel followed by SWAN Hs output panels for all MDA cases"
+                    >
+                    <figcaption>
+                        Rotated bathymetry and SWAN Hs output for each representative
+                        offshore wave case.
+                    </figcaption>
+                </figure>
+
+                <div class="figure-row">
+                    <figure class="figure-block">
+                        <img
+                            src="assets/all_mda_cases_spot_vs_offshore_hs.png"
+                            alt="Scatter plot of spot Hs versus offshore Hs for each MDA case"
+                        >
+                        <figcaption>
+                            Modelled spot Hs response compared with offshore Hs for
+                            each case.
+                        </figcaption>
+                    </figure>
+
+                    <figure class="figure-block">
+                        <img
+                            src="assets/swan_derived_wave_transfer_matrix_polar.png"
+                            alt="Polar plot of the interpolated SWAN-derived wave transfer matrix"
+                        >
+                        <figcaption>
+                            Interpolated wave transfer matrix used by Sykemeter to
+                            translate offshore wave forecasts to spot-scale Hs.
+                        </figcaption>
+                    </figure>
+                </div>
+            </div>
+        </section>
     </main>
 
     <script>
