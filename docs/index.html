@@ -169,19 +169,25 @@
             <p>
                 The GFS Wave forecast above is shown without modification. To estimate
                 conditions at the surf spot, Sykemeter applies a SWAN-derived transfer
-                matrix built from representative offshore wave cases near OTI.
+                matrix built from representative offshore wave cases near One Tree
+                Island South.
             </p>
 
             <p>
                 Historic wave records were filtered for outliers and reduced to 15
                 representative sea states using a maximum-dissimilarity algorithm. The
                 selected cases preserve spread in wave height, peak period and circular
-                wave direction, with K-means averages retained as a comparison. Each
-                MDA case was then used as offshore forcing for SWAN over the rotated
-                local bathymetry grid. At the surf spot, the transfer coefficient is calculated as spot Hs divided by
-                offshore Hs. The operational 24 by 18 matrix is filled between modelled
-                cases using periodic inverse-distance interpolation over circular
-                direction and log-scaled peak period.
+                wave direction, with K-means average cases retained as an additional
+                check on the wave climate. The MDA and K-means average cases were used
+                as offshore forcing for SWAN over the rotated local bathymetry grid at
+                low, mid and high tide by adjusting the model depth by -1.5 m, 0 m and
+                +1.5 m. At the surf spot, grid row 75 and grid column 22, the transfer
+                coefficient is calculated as spot Hs divided by offshore Hs. The sparse
+                SWAN case outputs are smoothed across circular wave direction,
+                log-scaled peak period and tide level using a regularized radial-basis
+                interpolation surface. The current forecast matches each GFS forecast
+                time to the predicted tide, then interpolates between the low-, mid-
+                and high-tide 24 by 18 transfer matrices before calculating spot Hs.
             </p>
 
             <div class="method-grid">
@@ -191,46 +197,33 @@
                         alt="Polar plot of One Tree Island South wave conditions with MDA cases and K-means averages"
                     >
                     <figcaption>
-                        MDA representative cases selected from the historic OTI buoy records,
-                        compared with K-means averages.
+                        MDA representative cases selected from the historic OTI South
+                        wave record, compared with K-means averages.
                     </figcaption>
                 </figure>
 
                 <figure class="figure-block">
                     <img
-                        src="assets/all_mda_cases_bathymetry_hsign_atlas.png"
-                        alt="Bathymetry panel followed by SWAN Hs output panels for all MDA cases"
+                            src="assets/swan_tide_model_transfer_summary.png"
+                            alt="Bathymetry, tide-aware transfer matrix, and SWAN Hs output panels for three wave cases at three tides"
                     >
                     <figcaption>
-                        Rotated bathymetry and SWAN Hs output for each representative
-                        offshore wave case.
+                        Rotated bathymetry, smoothed tide-aware transfer matrix, and
+                        SWAN Hs output for three offshore wave settings at low, mid
+                        and high tide.
                     </figcaption>
                 </figure>
 
-                <div class="figure-row">
-                    <figure class="figure-block">
-                        <img
-                            src="assets/all_mda_cases_spot_vs_offshore_hs.png"
-                            alt="Scatter plot of spot Hs versus offshore Hs for each MDA case"
-                        >
-                        <figcaption>
-                            Modelled spot Hs response compared with offshore Hs for
-                            each case.
-                        </figcaption>
-                    </figure>
-
-                    <figure class="figure-block">
-                        <img
-                            src="assets/swan_derived_wave_transfer_matrix_polar.png"
-                            alt="Polar plot of the interpolated SWAN-derived wave transfer matrix"
-                        >
-                        <figcaption>
-                            Interpolated wave transfer
-                            matrix. Circles show the SWAN MDA cases used to constrain
-                            the direction-period interpolation.
-                        </figcaption>
-                    </figure>
-                </div>
+                <figure class="figure-block">
+                    <img
+                        src="assets/spot_vs_offshore_hs_by_tide_and_family.png"
+                        alt="Scatter plot of spot Hs versus offshore Hs for MDA and K-means average cases at low, mid and high tide"
+                    >
+                    <figcaption>
+                        Modelled spot Hs response compared with offshore Hs for
+                        each MDA and K-means average case, separated by tide level.
+                    </figcaption>
+                </figure>
             </div>
         </section>
     </main>
