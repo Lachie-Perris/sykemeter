@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Interactive SWAN model output explorer for Sykemeter.">
+    <title>Sykemeter SWAN Model Explorer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #eef1f4;
+            color: #111820;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        main {
+            width: min(100%, 1400px);
+            margin: 0 auto;
+            padding: 14px;
+        }
+
+        a {
+            color: #0d5c63;
+        }
+
+        .surface {
+            background: #ffffff;
+            border-radius: 6px;
+            box-shadow:
+                0 1px 3px rgba(0, 0, 0, 0.08),
+                0 10px 32px rgba(0, 0, 0, 0.06);
+            padding: 22px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: clamp(1.6rem, 3vw, 2.3rem);
+        }
+
+        p {
+            max-width: 920px;
+            margin: 0 0 16px;
+            color: #26313b;
+            line-height: 1.5;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 18px 0;
+        }
+
+        label {
+            display: grid;
+            gap: 5px;
+            color: #465463;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        select,
+        .toggle {
+            min-height: 40px;
+            border: 1px solid #c9d2db;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #111820;
+            font: inherit;
+            padding: 8px 9px;
+        }
+
+        .toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 400;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+            margin: 12px 0 16px;
+        }
+
+        .summary div {
+            border: 1px solid #d7dee5;
+            border-radius: 4px;
+            padding: 10px;
+            background: #f7f9fb;
+        }
+
+        .summary span {
+            display: block;
+            color: #5a6875;
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin-bottom: 3px;
+        }
+
+        .summary strong {
+            font-size: 1.05rem;
+        }
+
+        .plot-wrap {
+            position: relative;
+            border: 1px solid #d7dee5;
+            border-radius: 4px;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            background: #ffffff;
+        }
+
+        .legend {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+            color: #465463;
+            font-size: 0.9rem;
+        }
+
+        .ramp {
+            height: 14px;
+            border: 1px solid #c9d2db;
+            border-radius: 3px;
+            background: linear-gradient(to right, #440154, #31688e, #35b779, #fde725);
+        }
+
+        .tooltip {
+            position: absolute;
+            display: none;
+            pointer-events: none;
+            max-width: 220px;
+            padding: 8px 9px;
+            border-radius: 4px;
+            background: rgba(17, 24, 32, 0.88);
+            color: #ffffff;
+            font-size: 0.82rem;
+            line-height: 1.35;
+            z-index: 5;
+        }
+
+        .note {
+            margin-top: 10px;
+            color: #5a6875;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 900px) {
+            main {
+                padding: 6px;
+            }
+
+            .surface {
+                border-radius: 0;
+                padding: 16px 12px;
+            }
+
+            .controls {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .summary {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 520px) {
+            .controls,
+            .summary {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="surface">
+            <p><a href="index.html">Back to forecast</a></p>
+            <h1>SWAN Model Explorer</h1>
+            <p>
+                Explore the completed SWAN tide-sensitivity runs by case, tide,
+                variable and colour scale. Direction arrows are sampled from SWAN
+                PDIR and overlaid in model-grid coordinates.
+            </p>
+
+            <div class="controls">
+                <label>
+                    Wave case
+                    <select id="caseSelect"></select>
+                </label>
+
+                <label>
+                    Tide
+                    <select id="tideSelect"></select>
+                </label>
+
+                <label>
+                    Variable
+                    <select id="variableSelect"></select>
+                </label>
+
+                <label>
+                    Colour scale
+                    <select id="scaleSelect">
+                        <option value="global">Global range</option>
+                        <option value="case">Selected case range</option>
+                    </select>
+                </label>
+
+                <label>
+                    Palette
+                    <select id="paletteSelect">
+                        <option value="viridis">Viridis</option>
+                        <option value="magma">Magma</option>
+                        <option value="cividis">Cividis</option>
+                        <option value="turbo">Turbo</option>
+                    </select>
+                </label>
+
+                <label class="toggle">
+                    <input id="arrowToggle" type="checkbox" checked>
+                    Show PDIR arrows
+                </label>
+            </div>
+
+            <div class="summary" id="summary"></div>
+
+            <div class="plot-wrap" id="plotWrap">
+                <canvas id="plotCanvas" width="1180" height="580"></canvas>
+                <div class="tooltip" id="tooltip"></div>
+            </div>
+
+            <div class="legend">
+                <div class="ramp" id="ramp"></div>
+                <div id="legendText"></div>
+            </div>
+
+            <p class="note" id="note"></p>
+        </section>
+    </main>
+
+    <script>
+        const DATA_URL = "assets/swan_model_explorer_data.json";
+        const canvas = document.getElementById("plotCanvas");
+        const context = canvas.getContext("2d");
+        const caseSelect = document.getElementById("caseSelect");
+        const tideSelect = document.getElementById("tideSelect");
+        const variableSelect = document.getElementById("variableSelect");
+        const scaleSelect = document.getElementById("scaleSelect");
+        const paletteSelect = document.getElementById("paletteSelect");
+        const arrowToggle = document.getElementById("arrowToggle");
+        const summary = document.getElementById("summary");
+        const tooltip = document.getElementById("tooltip");
+        const plotWrap = document.getElementById("plotWrap");
+        const legendText = document.getElementById("legendText");
+        const ramp = document.getElementById("ramp");
+        const note = document.getElementById("note");
+
+        let explorerData = null;
+        let currentGrid = null;
+        let currentRange = null;
+
+        const PALETTES = {
+            viridis: [
+                [68, 1, 84],
+                [49, 104, 142],
+                [53, 183, 121],
+                [253, 231, 37],
+            ],
+            magma: [
+                [0, 0, 4],
+                [87, 15, 109],
+                [187, 55, 84],
+                [252, 253, 191],
+            ],
+            cividis: [
+                [0, 32, 77],
+                [61, 87, 107],
+                [143, 132, 83],
+                [253, 234, 69],
+            ],
+            turbo: [
+                [48, 18, 59],
+                [42, 160, 246],
+                [164, 252, 60],
+                [220, 33, 32],
+            ],
+        };
+
+        function interpolateColour(stops, t) {
+            const value = Math.max(0, Math.min(1, t));
+            const scaled = value * (stops.length - 1);
+            const index = Math.min(Math.floor(scaled), stops.length - 2);
+            const local = scaled - index;
+            const a = stops[index];
+            const b = stops[index + 1];
+            return [
+                Math.round(a[0] + (b[0] - a[0]) * local),
+                Math.round(a[1] + (b[1] - a[1]) * local),
+                Math.round(a[2] + (b[2] - a[2]) * local),
+            ];
+        }
+
+        function colourForValue(value, range, paletteName) {
+            if (value === null || Number.isNaN(value)) {
+                return [238, 241, 244];
+            }
+
+            const span = range.max - range.min || 1;
+            const t = (value - range.min) / span;
+            return interpolateColour(PALETTES[paletteName], t);
+        }
+
+        function formatNumber(value, digits = 2) {
+            if (value === null || !Number.isFinite(value)) {
+                return "n/a";
+            }
+
+            return Number(value).toFixed(digits);
+        }
+
+        function selectedCaseId() {
+            return `${caseSelect.value}_${tideSelect.value}`;
+        }
+
+        function finiteRange(grid) {
+            let minimum = Infinity;
+            let maximum = -Infinity;
+
+            for (const row of grid) {
+                for (const value of row) {
+                    if (value === null || !Number.isFinite(value)) {
+                        continue;
+                    }
+
+                    minimum = Math.min(minimum, value);
+                    maximum = Math.max(maximum, value);
+                }
+            }
+
+            return {min: minimum, max: maximum};
+        }
+
+        function populateControls() {
+            for (const option of explorerData.case_options) {
+                const element = document.createElement("option");
+                element.value = option.source_case_id;
+                element.textContent = `${option.label} - Hs ${option.offshore_hs_m} m, Tp ${option.offshore_tp_s} s, Dir ${option.direction_from_deg} deg`;
+                caseSelect.appendChild(element);
+            }
+
+            for (const tide of explorerData.metadata.tides) {
+                const element = document.createElement("option");
+                element.value = tide.id;
+                element.textContent = tide.label;
+                tideSelect.appendChild(element);
+            }
+
+            for (const [key, variable] of Object.entries(explorerData.metadata.variables)) {
+                const element = document.createElement("option");
+                element.value = key;
+                element.textContent = `${variable.label} (${variable.unit})`;
+                variableSelect.appendChild(element);
+            }
+
+            caseSelect.value = "mda_case_013";
+            tideSelect.value = "tide_mid";
+            variableSelect.value = "hsign_m";
+        }
+
+        function updateSummary(caseData) {
+            const values = [
+                ["Offshore Hs", `${formatNumber(caseData.offshore_hs_m, 2)} m`],
+                ["Peak period", `${formatNumber(caseData.offshore_tp_s, 1)} s`],
+                ["Direction from", `${formatNumber(caseData.direction_from_deg, 0)} deg`],
+                ["Spot Hs", `${formatNumber(caseData.spot_hs_m, 2)} m`],
+                ["Spot ratio", `x${formatNumber(caseData.spot_hs_ratio, 2)}`],
+            ];
+
+            summary.innerHTML = values.map(([label, value]) => (
+                `<div><span>${label}</span><strong>${value}</strong></div>`
+            )).join("");
+        }
+
+        function drawArrow(x, y, u, v, length) {
+            const endX = x + u * length;
+            const endY = y - v * length;
+            const angle = Math.atan2(y - endY, endX - x);
+            const head = Math.max(4, length * 0.24);
+
+            context.beginPath();
+            context.moveTo(x, y);
+            context.lineTo(endX, endY);
+            context.stroke();
+
+            context.beginPath();
+            context.moveTo(endX, endY);
+            context.lineTo(
+                endX - head * Math.cos(angle - Math.PI / 6),
+                endY + head * Math.sin(angle - Math.PI / 6)
+            );
+            context.moveTo(endX, endY);
+            context.lineTo(
+                endX - head * Math.cos(angle + Math.PI / 6),
+                endY + head * Math.sin(angle + Math.PI / 6)
+            );
+            context.stroke();
+        }
+
+        function drawPlot() {
+            const caseData = explorerData.cases[selectedCaseId()];
+            const variable = variableSelect.value;
+            const variableInfo = explorerData.metadata.variables[variable];
+            const grid = caseData.grids[variable];
+            const rows = grid.length;
+            const cols = grid[0].length;
+            const width = canvas.width;
+            const height = Math.round(width * rows / cols);
+
+            canvas.height = height;
+            context.clearRect(0, 0, width, height);
+
+            const range = scaleSelect.value === "global"
+                ? explorerData.metadata.variable_ranges[variable]
+                : finiteRange(grid);
+
+            currentGrid = grid;
+            currentRange = range;
+
+            const cellWidth = width / cols;
+            const cellHeight = height / rows;
+            const paletteName = paletteSelect.value;
+
+            for (let row = 0; row < rows; row += 1) {
+                const y = (rows - row - 1) * cellHeight;
+                for (let col = 0; col < cols; col += 1) {
+                    const [red, green, blue] = colourForValue(grid[row][col], range, paletteName);
+                    context.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+                    context.fillRect(
+                        Math.floor(col * cellWidth),
+                        Math.floor(y),
+                        Math.ceil(cellWidth) + 1,
+                        Math.ceil(cellHeight) + 1
+                    );
+                }
+            }
+
+            context.strokeStyle = "rgba(255, 255, 255, 0.28)";
+            context.lineWidth = 1;
+            for (let col = 0; col <= cols; col += 8) {
+                context.beginPath();
+                context.moveTo(col * cellWidth, 0);
+                context.lineTo(col * cellWidth, height);
+                context.stroke();
+            }
+            for (let row = 0; row <= rows; row += 6) {
+                context.beginPath();
+                context.moveTo(0, row * cellHeight);
+                context.lineTo(width, row * cellHeight);
+                context.stroke();
+            }
+
+            if (arrowToggle.checked && variable !== "depth_m") {
+                context.strokeStyle = "rgba(255, 255, 255, 0.82)";
+                context.lineWidth = Math.max(1.2, width / 900);
+                const arrowLength = Math.min(cellWidth, cellHeight) * 2.8;
+                for (const arrow of caseData.arrows) {
+                    const x = (arrow[0] + 0.5) * cellWidth;
+                    const y = (rows - arrow[1] - 0.5) * cellHeight;
+                    drawArrow(x, y, arrow[2], arrow[3], arrowLength);
+                }
+            }
+
+            const spot = explorerData.metadata.spot;
+            const spotX = spot.col * cellWidth;
+            const spotY = (rows - spot.row) * cellHeight;
+            context.lineWidth = 2;
+            context.strokeStyle = "white";
+            context.beginPath();
+            context.arc(spotX, spotY, 5, 0, Math.PI * 2);
+            context.stroke();
+            context.strokeStyle = "black";
+            context.beginPath();
+            context.arc(spotX, spotY, 2.6, 0, Math.PI * 2);
+            context.stroke();
+
+            const stops = PALETTES[paletteName].map(([red, green, blue]) => `rgb(${red}, ${green}, ${blue})`);
+            ramp.style.background = `linear-gradient(to right, ${stops.join(", ")})`;
+            legendText.textContent = `${variableInfo.label}: ${formatNumber(range.min, 2)} to ${formatNumber(range.max, 2)} ${variableInfo.unit}`;
+            note.textContent = `${caseData.case_id}; boundary ${caseData.boundary_side}; water level ${formatNumber(caseData.water_level_m, 1)} m. ${explorerData.metadata.arrow_note}`;
+            updateSummary(caseData);
+        }
+
+        function showTooltip(event) {
+            if (!currentGrid) {
+                return;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            const rows = currentGrid.length;
+            const cols = currentGrid[0].length;
+            const col = Math.floor(x / rect.width * cols);
+            const row = rows - 1 - Math.floor(y / rect.height * rows);
+
+            if (row < 0 || row >= rows || col < 0 || col >= cols) {
+                tooltip.style.display = "none";
+                return;
+            }
+
+            const value = currentGrid[row][col];
+            const variable = explorerData.metadata.variables[variableSelect.value];
+            const stride = explorerData.metadata.display_stride;
+            tooltip.innerHTML = `row ${row * stride}, col ${col * stride}<br>${variable.label}: ${formatNumber(value, 3)} ${variable.unit}`;
+            tooltip.style.display = "block";
+            tooltip.style.left = `${Math.min(event.clientX - plotWrap.getBoundingClientRect().left + 12, rect.width - 180)}px`;
+            tooltip.style.top = `${Math.max(event.clientY - plotWrap.getBoundingClientRect().top - 46, 8)}px`;
+        }
+
+        function hideTooltip() {
+            tooltip.style.display = "none";
+        }
+
+        for (const element of [caseSelect, tideSelect, variableSelect, scaleSelect, paletteSelect, arrowToggle]) {
+            element.addEventListener("change", drawPlot);
+        }
+
+        canvas.addEventListener("mousemove", showTooltip);
+        canvas.addEventListener("mouseleave", hideTooltip);
+        window.addEventListener("resize", drawPlot);
+
+        fetch(DATA_URL)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Could not load ${DATA_URL}`);
+                }
+                return response.json();
+            })
+            .then((data) => {
+                explorerData = data;
+                populateControls();
+                drawPlot();
+            })
+            .catch((error) => {
+                context.font = "18px Arial";
+                context.fillStyle = "#9b1c31";
+                context.fillText(error.message, 24, 48);
+            });
+    </script>
+</body>
+</html>
