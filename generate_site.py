@@ -10,7 +10,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from surf_forecast import generate_final_plot
+from surf_forecast import (
+    TIDE_TRANSFER_MATRIX_PATHS,
+    generate_final_plot,
+)
 
 
 #### PATHS #####################################################################
@@ -22,6 +25,33 @@ OUTPUT_PATH = Path(
 STATE_PATH = Path(
     ".forecast_state/latest_gfs_cycle.txt"
 )
+
+
+#### PREFLIGHT #################################################################
+
+def validate_required_runtime_files() -> None:
+    """
+    Fail early if the tide-aware SWAN matrix files are not in the repository.
+    """
+    missing_paths = [
+        path
+        for path in TIDE_TRANSFER_MATRIX_PATHS.values()
+        if not path.exists()
+    ]
+
+    if missing_paths:
+        missing_list = "\n".join(
+            f"- {path.resolve()}"
+            for path in missing_paths
+        )
+
+        raise FileNotFoundError(
+            "The tide-aware SWAN transfer matrix files are required "
+            "to generate the forecast, but one or more are missing.\n\n"
+            f"Missing files:\n{missing_list}\n\n"
+            "Upload these files to the repository root, beside "
+            "surf_forecast.py and generate_site.py."
+        )
 
 
 #### COMMAND-LINE ARGUMENTS ####################################################
@@ -94,6 +124,8 @@ def main() -> None:
     )
 
     try:
+        validate_required_runtime_files()
+
         generate_final_plot(
             date_string=arguments.date,
             cycle=arguments.cycle,
