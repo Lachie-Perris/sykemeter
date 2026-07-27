@@ -4,7 +4,7 @@ Automated browser-ready surf forecast.
 Data sources
 ------------
 - NOAA GFS Wave at a fixed 0.25-degree model point
-- A local direction-period wave-transfer matrix
+- Local direction-period wave-transfer matrices for low, mid and high tide
 - MSQ/BOM predicted interval tide data using the original notebook method
 
 Public entry point
@@ -56,6 +56,21 @@ TRANSFER_MATRIX_PATH = (
     / "wave_transfer_matrix.txt"
 )
 
+TIDE_TRANSFER_MATRIX_PATHS = {
+    -1.5: (
+        MODULE_DIRECTORY
+        / "wave_transfer_matrix_swan_derived_tide_low.txt"
+    ),
+    0.0: (
+        MODULE_DIRECTORY
+        / "wave_transfer_matrix_swan_derived_tide_mid.txt"
+    ),
+    1.5: (
+        MODULE_DIRECTORY
+        / "wave_transfer_matrix_swan_derived_tide_high.txt"
+    ),
+}
+
 
 #### LOCATION CONFIGURATION ####################################################
 
@@ -87,6 +102,12 @@ REQUEST_TIMEOUT_SECONDS = 90
 REQUEST_PAUSE_SECONDS = 0.10
 
 TIDE_MATCH_TOLERANCE = pd.Timedelta("20min")
+
+# The SWAN tide-sensitivity cases were run at -1.5, 0.0 and +1.5 m
+# relative to an approximate mid-tide water level. The MSQ/Heron tide
+# series is chart-datum based, so 1.5 m is treated as the model mid-tide
+# reference and clipped to the available SWAN matrix range.
+TIDE_TRANSFER_REFERENCE_HEIGHT_M = 1.5
 
 
 #### REMOTE DATA SOURCES #######################################################
@@ -419,22 +440,48 @@ def load_transfer_matrix(
     return matrix
 
 
-def apply_transfer_matrix(
-    forecast: pd.DataFrame,
-    transfer_matrix: np.ndarray,
-) -> pd.DataFrame:
+def load_tide_transfer_matrices(
+    paths: dict[float, Path] = TIDE_TRANSFER_MATRIX_PATHS,
+) -> dict[float, np.ndarray]:
     """
-    Convert offshore GFS Hs to estimated nearshore Hs.
+    Load and validate low-, mid- and high-tide transfer matrices.
     """
-    result = forecast.copy()
+    if not paths:
+        raise ValueError(
+            "No tide transfer-matrix paths were supplied."
+        )
 
-    wave_directions = result[
+    matrices = {
+        float(tide_level): load_transfer_matrix(
+            path
+        )
+        for tide_level, path in sorted(
+            paths.items()
+        )
+    }
+
+    if len(matrices) < 2:
+        raise ValueError(
+            "At least two tide transfer matrices are required "
+            "for tide-aware interpolation."
+        )
+
+    return matrices
+
+
+def transfer_matrix_indices(
+    forecast: pd.DataFrame,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Map GFS wave direction and period to transfer-matrix bins.
+    """
+    wave_directions = forecast[
         "wave_direction_deg"
     ].to_numpy(
         dtype=float
     )
 
-    wave_periods = result[
+    wave_periods = forecast[
         "wave_period_s"
     ].to_numpy(
         dtype=float
@@ -492,6 +539,32 @@ def apply_transfer_matrix(
         count=len(mapped_periods),
     )
 
+    return (
+        mapped_directions,
+        mapped_periods,
+        row_indices,
+        column_indices,
+    )
+
+
+def apply_transfer_matrix(
+    forecast: pd.DataFrame,
+    transfer_matrix: np.ndarray,
+) -> pd.DataFrame:
+    """
+    Convert offshore GFS Hs to estimated nearshore Hs.
+    """
+    result = forecast.copy()
+
+    (
+        mapped_directions,
+        mapped_periods,
+        row_indices,
+        column_indices,
+    ) = transfer_matrix_indices(
+        result
+    )
+
     coefficients = transfer_matrix[
         row_indices,
         column_indices,
@@ -504,6 +577,149 @@ def apply_transfer_matrix(
     result[
         "matrix_period_s"
     ] = mapped_periods
+
+    result[
+        "transfer_coefficient"
+    ] = coefficients
+
+    result[
+        "nearshore_wave_height_m"
+    ] = (
+        result[
+            "wave_height_m"
+        ].to_numpy(
+            dtype=float
+        )
+        * coefficients
+    )
+
+    return result
+
+
+def tide_height_to_transfer_level(
+    tide_height_m,
+    reference_height_m: float = TIDE_TRANSFER_REFERENCE_HEIGHT_M,
+    matrix_levels: np.ndarray | None = None,
+) -> np.ndarray:
+    """
+    Convert predicted tide height to the SWAN matrix water-level coordinate.
+    """
+    tide_height = np.asarray(
+        tide_height_m,
+        dtype=float,
+    )
+
+    transfer_level = (
+        tide_height
+        - reference_height_m
+    )
+
+    if matrix_levels is None:
+        matrix_levels = np.array(
+            sorted(
+                TIDE_TRANSFER_MATRIX_PATHS
+            ),
+            dtype=float,
+        )
+
+    return np.clip(
+        transfer_level,
+        float(
+            np.nanmin(
+                matrix_levels
+            )
+        ),
+        float(
+            np.nanmax(
+                matrix_levels
+            )
+        ),
+    )
+
+
+def apply_tide_aware_transfer_matrices(
+    forecast: pd.DataFrame,
+    tide_transfer_matrices: dict[float, np.ndarray],
+    tide_reference_height_m: float = TIDE_TRANSFER_REFERENCE_HEIGHT_M,
+) -> pd.DataFrame:
+    """
+    Convert offshore GFS Hs to nearshore Hs using tide-interpolated matrices.
+    """
+    if "tide_height_m" not in forecast.columns:
+        raise KeyError(
+            "forecast must contain 'tide_height_m' before applying "
+            "tide-aware transfer matrices."
+        )
+
+    result = forecast.copy()
+
+    tide_levels = np.array(
+        sorted(
+            tide_transfer_matrices
+        ),
+        dtype=float,
+    )
+
+    matrix_stack = np.stack(
+        [
+            tide_transfer_matrices[
+                float(
+                    tide_level
+                )
+            ]
+            for tide_level in tide_levels
+        ],
+        axis=0,
+    )
+
+    (
+        mapped_directions,
+        mapped_periods,
+        row_indices,
+        column_indices,
+    ) = transfer_matrix_indices(
+        result
+    )
+
+    transfer_levels = tide_height_to_transfer_level(
+        result[
+            "tide_height_m"
+        ],
+        reference_height_m=tide_reference_height_m,
+        matrix_levels=tide_levels,
+    )
+
+    coefficients = np.array(
+        [
+            np.interp(
+                transfer_level,
+                tide_levels,
+                matrix_stack[
+                    :,
+                    row_index,
+                    column_index,
+                ],
+            )
+            for transfer_level, row_index, column_index in zip(
+                transfer_levels,
+                row_indices,
+                column_indices,
+            )
+        ],
+        dtype=float,
+    )
+
+    result[
+        "matrix_direction_deg"
+    ] = mapped_directions
+
+    result[
+        "matrix_period_s"
+    ] = mapped_periods
+
+    result[
+        "transfer_tide_level_m"
+    ] = transfer_levels
 
     result[
         "transfer_coefficient"
@@ -979,9 +1195,9 @@ def read_forecast_record(
 
 
 def collect_forecast(
-    transfer_matrix: np.ndarray,
     date_string: str,
     cycle: str,
+    transfer_matrix: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """
     Download and process the full selected GFS Wave cycle.
@@ -1080,10 +1296,11 @@ def collect_forecast(
             f"but received {len(forecast)}."
         )
 
-    forecast = apply_transfer_matrix(
-        forecast=forecast,
-        transfer_matrix=transfer_matrix,
-    )
+    if transfer_matrix is not None:
+        forecast = apply_transfer_matrix(
+            forecast=forecast,
+            transfer_matrix=transfer_matrix,
+        )
 
     forecast[
         "spot_name"
@@ -2120,9 +2337,10 @@ def rating_from_score(
 def prepare_quality_inputs(
     forecast: pd.DataFrame,
     tide: pd.DataFrame,
+    tide_transfer_matrices: dict[float, np.ndarray] | None = None,
 ) -> pd.DataFrame:
     """
-    Match every GFS forecast time to the nearest 10-minute tide value.
+    Match every GFS forecast time to the nearest tide and apply transfer.
     """
     forecast_data = forecast.copy()
 
@@ -2137,12 +2355,18 @@ def prepare_quality_inputs(
     )
 
     numeric_forecast_columns = [
-        "nearshore_wave_height_m",
+        "wave_height_m",
         "wave_period_s",
         "wave_direction_deg",
         "wind_speed_knots",
         "wind_direction_deg",
     ]
+
+    if tide_transfer_matrices is None:
+        numeric_forecast_columns.insert(
+            0,
+            "nearshore_wave_height_m",
+        )
 
     for column in numeric_forecast_columns:
         forecast_data[
@@ -2253,6 +2477,12 @@ def prepare_quality_inputs(
             f"{missing_tide_count} GFS forecast times."
         )
 
+    if tide_transfer_matrices is not None:
+        combined = apply_tide_aware_transfer_matrices(
+            forecast=combined,
+            tide_transfer_matrices=tide_transfer_matrices,
+        )
+
     combined[
         "time_local"
     ] = (
@@ -2271,6 +2501,7 @@ def score_forecast_times(
     forecast: pd.DataFrame,
     tide: pd.DataFrame,
     weights: dict[str, float] | None = None,
+    tide_transfer_matrices: dict[float, np.ndarray] | None = None,
 ) -> pd.DataFrame:
     """
     Calculate vectorised surf-quality scores.
@@ -2322,6 +2553,7 @@ def score_forecast_times(
     result = prepare_quality_inputs(
         forecast=forecast,
         tide=tide,
+        tide_transfer_matrices=tide_transfer_matrices,
     )
 
     component_scores = np.column_stack(
@@ -3240,7 +3472,7 @@ def plot_publication_surf_forecast(
 
     header_blocks = [
         (
-            "Wave height",
+            "Tide-adjusted Hs",
             current_conditions[
                 "wave_height_text"
             ],
@@ -3387,7 +3619,7 @@ def plot_publication_surf_forecast(
         width=bar_width,
         color=WAVE_HEIGHT_COLOUR,
         alpha=0.72,
-        label="Nearshore wave height",
+        label="Tide-adjusted nearshore Hs",
         zorder=3,
     )
 
@@ -3410,7 +3642,7 @@ def plot_publication_surf_forecast(
     )
 
     wave_axis.set_title(
-        "Waves",
+        "Waves - tide-aware SWAN transfer",
         loc="left",
         pad=7,
     )
@@ -3755,12 +3987,11 @@ def generate_final_plot(
         output_path
     )
 
-    transfer_matrix = load_transfer_matrix(
-        TRANSFER_MATRIX_PATH
+    tide_transfer_matrices = load_tide_transfer_matrices(
+        TIDE_TRANSFER_MATRIX_PATHS
     )
 
     forecast_df = collect_forecast(
-        transfer_matrix=transfer_matrix,
         date_string=date_string,
         cycle=cycle,
     )
@@ -3774,6 +4005,7 @@ def generate_final_plot(
         forecast=forecast_df,
         tide=tide_df,
         weights=QUALITY_WEIGHTS,
+        tide_transfer_matrices=tide_transfer_matrices,
     )
 
     final_plot_data = prepare_forecast_plot_data(
