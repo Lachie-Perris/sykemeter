@@ -71,6 +71,11 @@ TIDE_TRANSFER_MATRIX_PATHS = {
     ),
 }
 
+TIDE_TRANSFER_MATRIX_LONG_PATH = (
+    MODULE_DIRECTORY
+    / "wave_transfer_matrix_swan_derived_tide_long.csv"
+)
+
 
 #### LOCATION CONFIGURATION ####################################################
 
@@ -442,6 +447,7 @@ def load_transfer_matrix(
 
 def load_tide_transfer_matrices(
     paths: dict[float, Path] = TIDE_TRANSFER_MATRIX_PATHS,
+    long_path: Path = TIDE_TRANSFER_MATRIX_LONG_PATH,
 ) -> dict[float, np.ndarray]:
     """
     Load and validate low-, mid- and high-tide transfer matrices.
@@ -449,6 +455,30 @@ def load_tide_transfer_matrices(
     if not paths:
         raise ValueError(
             "No tide transfer-matrix paths were supplied."
+        )
+
+    missing_paths = [
+        path
+        for path in paths.values()
+        if not path.exists()
+    ]
+
+    if missing_paths:
+        if long_path.exists():
+            return load_tide_transfer_matrices_from_long_table(
+                long_path
+            )
+
+        missing_list = "\n".join(
+            f"- {path.resolve()}"
+            for path in missing_paths
+        )
+
+        raise FileNotFoundError(
+            "Wave-transfer matrix files were not found.\n\n"
+            f"Missing files:\n{missing_list}\n\n"
+            "Upload the low-, mid- and high-tide matrix files, "
+            f"or upload the long table fallback:\n{long_path.resolve()}"
         )
 
     matrices = {
@@ -467,6 +497,152 @@ def load_tide_transfer_matrices(
         )
 
     return matrices
+
+
+def load_tide_transfer_matrices_from_long_table(
+    path: Path = TIDE_TRANSFER_MATRIX_LONG_PATH,
+) -> dict[float, np.ndarray]:
+    """
+    Rebuild tide matrices from the long CSV transfer-matrix table.
+    """
+    if not path.exists():
+        raise FileNotFoundError(
+            "Tide-aware long transfer-matrix table was not found:\n"
+            f"{path.resolve()}"
+        )
+
+    table = pd.read_csv(
+        path
+    )
+
+    required_columns = {
+        "water_level_m",
+        "matrix_row",
+        "matrix_col",
+        "transfer_coefficient",
+    }
+
+    missing_columns = (
+        required_columns
+        - set(
+            table.columns
+        )
+    )
+
+    if missing_columns:
+        raise ValueError(
+            "Long transfer-matrix table is missing columns: "
+            f"{sorted(missing_columns)}"
+        )
+
+    expected_shape = (
+        len(ROW_MAPPING),
+        max(COL_MAPPING.values()) + 1,
+    )
+
+    matrices: dict[
+        float,
+        np.ndarray,
+    ] = {}
+
+    for water_level, group in table.groupby(
+        "water_level_m"
+    ):
+        matrix = np.full(
+            expected_shape,
+            np.nan,
+            dtype=float,
+        )
+
+        row_indices = pd.to_numeric(
+            group[
+                "matrix_row"
+            ],
+            errors="coerce",
+        ).astype(
+            "Int64"
+        )
+
+        column_indices = pd.to_numeric(
+            group[
+                "matrix_col"
+            ],
+            errors="coerce",
+        ).astype(
+            "Int64"
+        )
+
+        coefficients = pd.to_numeric(
+            group[
+                "transfer_coefficient"
+            ],
+            errors="coerce",
+        )
+
+        valid = (
+            row_indices.notna()
+            & column_indices.notna()
+            & coefficients.notna()
+        )
+
+        matrix[
+            row_indices[
+                valid
+            ].astype(
+                int
+            ),
+            column_indices[
+                valid
+            ].astype(
+                int
+            ),
+        ] = coefficients[
+            valid
+        ].to_numpy(
+            dtype=float
+        )
+
+        if matrix.shape != expected_shape:
+            raise ValueError(
+                f"Transfer matrix for tide level {water_level} "
+                f"has shape {matrix.shape}, expected {expected_shape}."
+            )
+
+        if not np.all(
+            np.isfinite(
+                matrix
+            )
+        ):
+            raise ValueError(
+                f"Transfer matrix for tide level {water_level} "
+                "contains missing or non-finite cells."
+            )
+
+        if np.any(
+            matrix < 0
+        ):
+            raise ValueError(
+                f"Transfer matrix for tide level {water_level} "
+                "contains negative values."
+            )
+
+        matrices[
+            float(
+                water_level
+            )
+        ] = matrix
+
+    if len(matrices) < 2:
+        raise ValueError(
+            "The long transfer-matrix table must contain at least "
+            "two tide levels."
+        )
+
+    return dict(
+        sorted(
+            matrices.items()
+        )
+    )
 
 
 def transfer_matrix_indices(

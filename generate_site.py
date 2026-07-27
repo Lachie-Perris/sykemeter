@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 
 from surf_forecast import (
+    TIDE_TRANSFER_MATRIX_LONG_PATH,
     TIDE_TRANSFER_MATRIX_PATHS,
     generate_final_plot,
 )
@@ -31,7 +32,7 @@ STATE_PATH = Path(
 
 def validate_required_runtime_files() -> None:
     """
-    Fail early if the tide-aware SWAN matrix files are not in the repository.
+    Fail early if no tide-aware SWAN matrix source is in the repository.
     """
     missing_paths = [
         path
@@ -39,19 +40,26 @@ def validate_required_runtime_files() -> None:
         if not path.exists()
     ]
 
-    if missing_paths:
-        missing_list = "\n".join(
-            f"- {path.resolve()}"
-            for path in missing_paths
-        )
+    if not missing_paths:
+        return
 
-        raise FileNotFoundError(
-            "The tide-aware SWAN transfer matrix files are required "
-            "to generate the forecast, but one or more are missing.\n\n"
-            f"Missing files:\n{missing_list}\n\n"
-            "Upload these files to the repository root, beside "
-            "surf_forecast.py and generate_site.py."
-        )
+    if TIDE_TRANSFER_MATRIX_LONG_PATH.exists():
+        return
+
+    missing_list = "\n".join(
+        f"- {path.resolve()}"
+        for path in missing_paths
+    )
+
+    raise FileNotFoundError(
+        "The tide-aware SWAN transfer matrix files are required "
+        "to generate the forecast, but one or more are missing.\n\n"
+        f"Missing files:\n{missing_list}\n\n"
+        "Either upload these files to the repository root, beside "
+        "surf_forecast.py and generate_site.py, or upload the long "
+        "table fallback:\n"
+        f"- {TIDE_TRANSFER_MATRIX_LONG_PATH.resolve()}"
+    )
 
 
 #### COMMAND-LINE ARGUMENTS ####################################################
