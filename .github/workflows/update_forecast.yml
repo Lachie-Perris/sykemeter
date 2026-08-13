@@ -1,6 +1,19 @@
 name: Update surf forecast
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "check_cycle.py"
+      - "generate_site.py"
+      - "requirements.txt"
+      - "surf_forecast.py"
+      - "wave_transfer_matrix*.txt"
+      - "wave_transfer_matrix_swan_derived_tide_long.csv"
+      - ".github/workflows/update_forecast.yml"
+
   schedule:
     # Check at minute 23 of every hour.
     # The full forecast only runs when the GFS cycle changes.
@@ -35,8 +48,10 @@ jobs:
       MPLBACKEND: Agg
       PYTHONUNBUFFERED: "1"
       FORCE_UPDATE: >-
-        ${{ github.event_name == 'workflow_dispatch'
-            && inputs.force_update
+        ${{ (github.event_name == 'workflow_dispatch'
+            && inputs.force_update)
+            || (github.event_name == 'push'
+            && github.actor != 'github-actions[bot]')
             || false }}
 
     steps:
@@ -69,17 +84,17 @@ jobs:
             --cycle "${{ steps.cycle.outputs.cycle }}"
 
       - name: Configure GitHub Pages
-        if: steps.cycle.outputs.needs_update == 'true'
+        if: steps.cycle.outputs.needs_update == 'true' || github.event_name == 'push'
         uses: actions/configure-pages@v5
 
       - name: Upload website
-        if: steps.cycle.outputs.needs_update == 'true'
+        if: steps.cycle.outputs.needs_update == 'true' || github.event_name == 'push'
         uses: actions/upload-pages-artifact@v5
         with:
           path: docs
 
       - name: Deploy website
-        if: steps.cycle.outputs.needs_update == 'true'
+        if: steps.cycle.outputs.needs_update == 'true' || github.event_name == 'push'
         id: deployment
         uses: actions/deploy-pages@v5
 
