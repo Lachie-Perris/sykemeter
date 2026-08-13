@@ -174,10 +174,10 @@
             <h1 id="matrix-method-heading">SWAN-Derived Wave Transfer Matrix</h1>
 
             <p>
-                To estimate
-                conditions at the 'surf spot', Sykemeter applies a SWAN-derived transfer
-                matrix built from representative offshore wave cases near One Tree
-                Island.
+                The offshore GFS Wave forecast above is shown directly, while the
+                estimated spot Hs is calculated by applying a tide-aware SWAN-derived
+                transfer matrix built from representative offshore wave cases near
+                One Tree Island South.
             </p>
 
             <p>
@@ -186,30 +186,22 @@
                 selected cases preserve spread in wave height, peak period and circular
                 wave direction, with K-means average cases retained as an additional
                 check on the wave climate. The MDA and K-means average cases were used
-                as offshore forcing for SWAN over the rotated local bathymetry grid at
-                low, mid and high tide by adjusting the model depth. At the 'surf spot', the transfer
-                coefficient is calculated as spot Hs divided by offshore Hs. The sparse
-                SWAN case outputs are smoothed across circular wave direction,
-                log-scaled peak period and tide level using a regularized radial-basis
-                interpolation surface. The current forecast matches each GFS forecast
-                time to the predicted tide, then interpolates between the low-, mid-
-                and high-tide 24 by 18 transfer matrices before calculating spot Hs.
+                as offshore forcing for a higher-resolution unstructured SWAN mesh with
+                open-water boundaries on each exposed edge, so oblique waves can enter
+                through the appropriate side of the model. Low, mid and high tide were
+                represented by adjusting model water level by -1.5 m, 0 m and +1.5 m.
+                At the surf spot, the transfer coefficient is calculated as spot Hs
+                divided by offshore Hs. The sparse SWAN case outputs are smoothed across
+                circular wave direction, log-scaled peak period and tide level using a
+                regularized radial-basis interpolation surface. The current forecast
+                matches each GFS forecast time to the predicted tide, then interpolates
+                between the low-, mid- and high-tide 24 by 18 transfer matrices before
+                calculating spot Hs.
             </p>
 
             <p>
                 <a class="method-link" href="swan_model_explorer.html">
                     Open the interactive SWAN model explorer
-                </a>
-            </p>
-
-            <p>
-                <a class="method-link" href="https://github.com/Lachie-Perris/sykemeter">
-                    See the github repository
-                </a>
-            </p>
-
-            <p>
-                 Contact lachlanperris@gmail.com for suggestions
                 </a>
             </p>
 
@@ -231,9 +223,8 @@
                         alt="Bathymetry, tide-aware transfer matrix, and SWAN Hs output panels for three wave cases at three tides"
                     >
                     <figcaption>
-                        Rotated bathymetry, smoothed tide-aware transfer matrix, and
-                        SWAN Hs output for three offshore wave settings at low, mid
-                        and high tide.
+                        Tide-aware transfer matrices and unstructured SWAN Hs outputs
+                        for three offshore wave settings at low, mid and high tide.
                     </figcaption>
                 </figure>
 
