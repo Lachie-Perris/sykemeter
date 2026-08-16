@@ -1,260 +1,43 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1"
-    >
-
-    <meta
-        http-equiv="refresh"
-        content="900"
-    >
-
-    <meta
-        name="description"
-        content="Sykemeter automated seven-day wave, wind and tide forecast."
-    >
-
-    <title>Sykemeter</title>
-
-    <style>
-        :root {
-            color-scheme: light;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html,
-        body {
-            margin: 0;
-            min-height: 100%;
-            background: #eef1f4;
-        }
-
-        body {
-            font-family:
-                Arial,
-                Helvetica,
-                sans-serif;
-        }
-
-        main {
-            width: min(100%, 2200px);
-            margin: 0 auto;
-            padding: 14px;
-        }
-
-        h1,
-        h2,
-        p {
-            margin-top: 0;
-        }
-
-        h1 {
-            font-size: clamp(1.7rem, 3vw, 2.6rem);
-            margin-bottom: 10px;
-        }
-
-        h2 {
-            font-size: clamp(1.2rem, 2vw, 1.7rem);
-            margin-bottom: 8px;
-        }
-
-        p {
-            color: #26313b;
-            font-size: 1rem;
-            line-height: 1.55;
-            max-width: 980px;
-        }
-
-        .forecast-frame {
-            overflow: hidden;
-            background: #ffffff;
-            border-radius: 6px;
-            box-shadow:
-                0 1px 3px rgba(0, 0, 0, 0.08),
-                0 10px 32px rgba(0, 0, 0, 0.07);
-        }
-
-        #forecast {
-            display: block;
-            width: 100%;
-            height: auto;
-            min-height: 300px;
-            background: #ffffff;
-        }
-
-        .method {
-            margin-top: 26px;
-            padding: 28px;
-            background: #ffffff;
-            border-radius: 6px;
-            box-shadow:
-                0 1px 3px rgba(0, 0, 0, 0.08),
-                0 10px 32px rgba(0, 0, 0, 0.06);
-        }
-
-        .method-grid {
-            display: grid;
-            gap: 24px;
-            margin-top: 18px;
-        }
-
-        .figure-block {
-            margin: 0;
-        }
-
-        .figure-block.compact {
-            width: min(100%, 760px);
-            margin-right: auto;
-            margin-left: auto;
-        }
-
-        .figure-block img {
-            display: block;
-            width: 100%;
-            height: auto;
-            border: 1px solid #d7dee5;
-            border-radius: 4px;
-            background: #ffffff;
-        }
-
-        .figure-block figcaption {
-            margin-top: 8px;
-            color: #465463;
-            font-size: 0.92rem;
-            line-height: 1.45;
-        }
-
-        .figure-row {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 24px;
-        }
-
-        .method-link {
-            display: inline-block;
-            margin-top: 6px;
-            color: #0d5c63;
-            font-weight: 700;
-        }
-
-        @media (max-width: 700px) {
-            main {
-                padding: 4px;
-            }
-
-            .forecast-frame {
-                border-radius: 0;
-            }
-
-            .method {
-                margin-top: 10px;
-                padding: 18px 14px;
-                border-radius: 0;
-            }
-
-            .figure-row {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sykemeter — Surf Forecast</title>
+  <meta name="description" content="Tide-aware nearshore wave guidance from Sykemeter, powered by GFS Wave and SWAN modelling.">
+  <meta property="og:title" content="Sykemeter — Surf Forecast">
+  <meta property="og:description" content="Offshore data. Local understanding.">
+  <meta property="og:image" content="og.png">
+  <link rel="icon" href="favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
-    <main>
-        <div class="forecast-frame">
-            <img
-                id="forecast"
-                src="final_surf_forecast.svg"
-                alt="Current Sykemeter forecast"
-            >
-        </div>
-
-        <section class="method" aria-labelledby="matrix-method-heading">
-            <h1 id="matrix-method-heading">SWAN-Derived Wave Transfer Matrix</h1>
-
-            <p>
-                The offshore GFS Wave forecast above is shown directly, while the
-                estimated spot Hs is calculated by applying a tide-aware SWAN-derived
-                transfer matrix built from representative offshore wave cases near
-                One Tree Island South.
-            </p>
-
-            <p>
-                Historic wave records were filtered for outliers and reduced to 15
-                representative sea states using a maximum-dissimilarity algorithm. The
-                selected cases preserve spread in wave height, peak period and circular
-                wave direction, with K-means average cases retained as an additional
-                check on the wave climate. The MDA and K-means average cases were used
-                as offshore forcing for a higher-resolution unstructured SWAN mesh with
-                open-water boundaries on each exposed edge, so oblique waves can enter
-                through the appropriate side of the model. Low, mid and high tide were
-                represented by adjusting model water level by -1.5 m, 0 m and +1.5 m.
-                At the surf spot, the transfer coefficient is calculated as spot Hs
-                divided by offshore Hs. The sparse SWAN case outputs are smoothed across
-                circular wave direction, log-scaled peak period and tide level using a
-                regularized radial-basis interpolation surface. The current forecast
-                matches each GFS forecast time to the predicted tide, then interpolates
-                between the low-, mid- and high-tide 24 by 18 transfer matrices before
-                calculating spot Hs.
-            </p>
-
-            <p>
-                <a class="method-link" href="swan_model_explorer.html">
-                    Open the interactive SWAN model explorer
-                </a>
-            </p>
-
-            <div class="method-grid">
-                <figure class="figure-block compact">
-                    <img
-                        src="assets/oti_south_historic_polar_wave_conditions.png"
-                        alt="Polar plot of One Tree Island South wave conditions with MDA cases and K-means averages"
-                    >
-                    <figcaption>
-                        MDA representative cases selected from the historic OTI South
-                        wave record, compared with K-means averages.
-                    </figcaption>
-                </figure>
-
-                <figure class="figure-block">
-                    <img
-                        src="assets/swan_tide_model_transfer_summary.png"
-                        alt="SWAN Hs output panels for three wave cases at three tides"
-                    >
-                    <figcaption>
-                        Unstructured SWAN Hs outputs for three offshore wave settings
-                        at low, mid and high tide.
-                    </figcaption>
-                </figure>
-
-                <figure class="figure-block">
-                    <img
-                        src="assets/spot_vs_offshore_hs_by_tide_and_family.png"
-                        alt="Scatter plot of spot Hs versus offshore Hs for MDA and K-means average cases at low, mid and high tide"
-                    >
-                    <figcaption>
-                        Modelled spot Hs response compared with offshore Hs for
-                        each MDA and K-means average case, separated by tide level.
-                    </figcaption>
-                </figure>
-            </div>
-        </section>
-    </main>
-
-    <script>
-        const forecastImage =
-            document.getElementById("forecast");
-
-        forecastImage.src =
-            "final_surf_forecast.svg?v=" +
-            Date.now();
-    </script>
+<main>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Sykemeter home"><span class="brand-mark"><i></i><i></i><i></i></span><span>SYKEMETER</span></a>
+    <nav aria-label="Main navigation"><a class="active" href="#forecast">Forecast</a><a href="#model">Model</a><a href="swan_model_explorer.html">Explorer</a></nav>
+    <span class="location">SYKEMETER · QLD</span>
+  </header>
+  <section class="hero" id="top">
+    <div class="hero-content"><div class="eyebrow"><span></span> LIVE FORECAST</div><p class="place">Capricorn Group · Southern Great Barrier Reef</p><h1><em>Sykemeter</em></h1><p class="lede">Tide-aware nearshore wave guidance, transformed from offshore GFS conditions using a high-resolution SWAN model.</p></div>
+    <div class="hero-status"><span class="status-label">NOW</span><strong data-field="height">—</strong><span>nearshore Hs</span></div>
+  </section>
+  <section class="conditions" aria-label="Current conditions">
+    <article class="rating-card"><div class="rating-dot poor" id="rating-dot"></div><div><span>SURF QUALITY</span><strong data-field="rating">—</strong></div><small>SWAN rating</small></article>
+    <article><span>SWELL</span><strong data-field="swell">—</strong><small>Primary wave</small></article>
+    <article><span>WIND</span><strong data-field="wind">—</strong><small>At the site</small></article>
+    <article><span>TIDE</span><strong data-field="tide">—</strong><small>Predicted level</small></article>
+  </section>
+  <section class="forecast-section" id="forecast">
+    <div class="section-heading"><div><span class="kicker">7-DAY OUTLOOK</span><h2>Conditions at a glance</h2></div><div class="update"><span data-field="updated">Loading current forecast…</span><small data-field="run"></small></div></div>
+    <div class="forecast-card"><div class="chart-toolbar"><span class="live-pill">LIVE MODEL</span><div><span><i class="legend swell"></i> Nearshore Hs</span><span><i class="legend period"></i> Period</span><span><i class="legend wind"></i> Wind</span></div></div><div class="chart-frame"><img id="forecast-image" src="final_surf_forecast.svg" alt="Live seven-day Sykemeter wave, wind and tide forecast"></div><p class="chart-note">Forecast updates automatically from the latest available GFS Wave run. Heights are adjusted for local tide and reef transformation.</p></div>
+  </section>
+  <section class="model" id="model"><div class="model-copy"><span class="kicker light">UNDER THE HOOD</span><h2>Offshore data.<br>Local understanding.</h2><p>Sykemeter turns broad-scale GFS Wave forecasts into a spot-specific estimate. A SWAN-derived transfer matrix accounts for wave direction, period and changing tide level across the reef.</p><a class="explore-button" href="swan_model_explorer.html">Open model explorer <span>↗</span></a></div><div class="process" aria-label="Forecast process"><article><b>01</b><div><strong>Offshore forecast</strong><p>GFS wave height, period and direction</p></div></article><article><b>02</b><div><strong>Tide-aware transfer</strong><p>SWAN response interpolated by sea state</p></div></article><article><b>03</b><div><strong>Nearshore outlook</strong><p>Estimated spot height and surf quality</p></div></article></div></section>
+  <footer><a class="brand footer-brand" href="#top"><span class="brand-mark"><i></i><i></i><i></i></span><span>SYKEMETER</span></a><p>Experimental wave guidance from Sykemeter.</p><a href="#forecast">Back to forecast ↑</a></footer>
+</main>
+<script src="app.js"></script>
 </body>
 </html>
