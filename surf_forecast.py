@@ -142,8 +142,15 @@ WAVE_HEIGHT_COLOUR = "#137a7f"
 WAVE_PERIOD_COLOUR = "#d95f59"
 WIND_COLOUR = "#3366a3"
 TIDE_COLOUR = "#2f5d62"
-HEADER_CARD_FACE = "#f6f8fa"
-HEADER_CARD_EDGE = "#d7dee5"
+SITE_NAVY = "#061e2d"
+SITE_INK = "#102531"
+SITE_OCEAN = "#087f8c"
+SITE_SEA = "#66d4c2"
+SITE_FOAM = "#edf6f3"
+SITE_LINE = "#dbe6e5"
+SITE_MUTED = "#63747b"
+HEADER_CARD_FACE = "#ffffff"
+HEADER_CARD_EDGE = "#dbe6e5"
 
 plt.rcParams.update(
     {
@@ -3620,30 +3627,66 @@ def plot_publication_surf_forecast(
 
     #### HEADER ###############################################################
 
-    header_axis.axis(
-        "off"
+    header_axis.set_facecolor(
+        SITE_NAVY
+    )
+
+    header_axis.set_xticks(
+        []
+    )
+
+    header_axis.set_yticks(
+        []
+    )
+
+    for spine in header_axis.spines.values():
+        spine.set_visible(
+            False
+        )
+
+    header_axis.set_xlim(
+        0,
+        1,
+    )
+
+    header_axis.set_ylim(
+        0,
+        1,
     )
 
     header_axis.text(
-        0.00,
-        0.98,
+        0.025,
+        0.925,
+        "LIVE FORECAST",
+        ha="left",
+        va="top",
+        fontsize=8.8,
+        fontweight="bold",
+        color=SITE_SEA,
+        zorder=3,
+    )
+
+    header_axis.text(
+        0.025,
+        0.805,
         SPOT_NAME,
         ha="left",
         va="top",
-        fontsize=30,
-        fontweight="bold",
+        fontsize=28,
+        fontweight="heavy",
+        color=SITE_SEA,
     )
 
     header_axis.text(
-        0.00,
-        0.80,
+        0.025,
+        0.615,
         current_conditions[
             "time_text"
         ],
         ha="left",
         va="top",
-        fontsize=12,
-        color="#465463",
+        fontsize=10.2,
+        color="#bed0d3",
     )
 
     header_blocks = [
@@ -3652,55 +3695,55 @@ def plot_publication_surf_forecast(
             current_conditions[
                 "wave_height_text"
             ],
-            0.00,
-            0.46,
-            0.37,
-            0.27,
-            23,
+            0.025,
+            0.275,
+            0.455,
+            0.255,
+            21,
         ),
         (
             "Rating",
             current_conditions[
                 "rating_text"
             ],
-            0.51,
-            0.46,
-            0.37,
-            0.27,
-            23,
+            0.520,
+            0.275,
+            0.455,
+            0.255,
+            21,
         ),
         (
             "Swell",
             current_conditions[
                 "swell_text"
             ],
-            0.00,
-            0.13,
-            0.31,
-            0.24,
-            15,
+            0.025,
+            0.045,
+            0.300,
+            0.175,
+            12.4,
         ),
         (
             "Wind",
             current_conditions[
                 "wind_text"
             ],
-            0.34,
-            0.13,
-            0.31,
-            0.24,
-            15,
+            0.350,
+            0.045,
+            0.300,
+            0.175,
+            12.4,
         ),
         (
             "Tide",
             current_conditions[
                 "tide_text"
             ],
-            0.68,
-            0.13,
-            0.32,
-            0.24,
-            15,
+            0.675,
+            0.045,
+            0.300,
+            0.175,
+            12.4,
         ),
     ]
 
@@ -3726,6 +3769,7 @@ def plot_publication_surf_forecast(
                 linewidth=0.7,
                 edgecolor=HEADER_CARD_EDGE,
                 facecolor=HEADER_CARD_FACE,
+                alpha=0.96,
                 zorder=1,
             )
         )
@@ -3735,13 +3779,13 @@ def plot_publication_surf_forecast(
             + 0.018,
             y_position
             + height
-            - 0.035,
+            - 0.040,
             label,
             ha="left",
             va="top",
-            fontsize=9,
+            fontsize=7.6,
             fontweight="bold",
-            color="#465463",
+            color=SITE_MUTED,
             zorder=2,
         )
 
@@ -3755,8 +3799,8 @@ def plot_publication_surf_forecast(
             ha="left",
             va="center",
             fontsize=value_size,
-            fontweight="semibold",
-            color="#111820",
+            fontweight="bold",
+            color=SITE_INK,
             zorder=2,
         )
 
@@ -4145,6 +4189,31 @@ def plot_publication_surf_forecast(
         output_path,
         **save_arguments,
     )
+
+    if output_format == "svg":
+        svg_text = output_path.read_text(
+            encoding="utf-8"
+        )
+
+        svg_text = svg_text.replace(
+            "font-family: 'DejaVu Sans'",
+            "font-family: Inter, Arial, sans-serif",
+        )
+
+        svg_text = svg_text.replace(
+            "font-family: DejaVu Sans",
+            "font-family: Inter, Arial, sans-serif",
+        )
+
+        svg_text = svg_text.replace(
+            "'DejaVu Sans'",
+            "Inter, Arial, sans-serif",
+        )
+
+        output_path.write_text(
+            svg_text,
+            encoding="utf-8",
+        )
 
     return figure
 
