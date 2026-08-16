@@ -3573,19 +3573,20 @@ def plot_publication_surf_forecast(
     figure = plt.figure(
         figsize=(
             12.4,
-            13.8,
+            15.4,
         ),
         layout="constrained",
         facecolor="white",
     )
 
     grid = figure.add_gridspec(
-        nrows=5,
+        nrows=6,
         ncols=1,
         height_ratios=[
             1.80,
             0.34,
-            3.70,
+            3.30,
+            2.25,
             2.55,
             2.15,
         ],
@@ -3611,16 +3612,23 @@ def plot_publication_surf_forecast(
         sharex=quality_axis,
     )
 
-    wind_axis = figure.add_subplot(
+    raw_gfs_axis = figure.add_subplot(
         grid[
             3
         ],
         sharex=quality_axis,
     )
 
-    tide_axis = figure.add_subplot(
+    wind_axis = figure.add_subplot(
         grid[
             4
+        ],
+        sharex=quality_axis,
+    )
+
+    tide_axis = figure.add_subplot(
+        grid[
+            5
         ],
         sharex=quality_axis,
     )
@@ -3839,7 +3847,7 @@ def plot_publication_surf_forecast(
         width=bar_width,
         color=WAVE_HEIGHT_COLOUR,
         alpha=0.72,
-        label="Tide-adjusted nearshore Hs",
+        label="Spot Hs - SWAN/tide adjusted",
         zorder=3,
     )
 
@@ -3862,7 +3870,7 @@ def plot_publication_surf_forecast(
     )
 
     wave_axis.set_title(
-        "Waves - tide-aware SWAN transfer",
+        "Spot waves - tide-aware SWAN transfer",
         loc="left",
         pad=7,
     )
@@ -3889,7 +3897,7 @@ def plot_publication_surf_forecast(
         markersize=3.2,
         linewidth=1.8,
         color=WAVE_PERIOD_COLOUR,
-        label="Primary wave period",
+        label="Raw GFS primary period",
         zorder=5,
     )
 
@@ -3943,6 +3951,78 @@ def plot_publication_surf_forecast(
         frameon=False,
         handlelength=2.2,
         columnspacing=1.4,
+    )
+
+    #### RAW GFS WAVES ########################################################
+
+    raw_gfs_height = forecast_data[
+        "wave_height_m"
+    ]
+
+    maximum_raw_gfs_height = max(
+        float(
+            raw_gfs_height.max()
+        ),
+        0.5,
+    )
+
+    raw_gfs_axis.bar(
+        times,
+        raw_gfs_height,
+        width=bar_width,
+        color=SITE_MUTED,
+        alpha=0.48,
+        label="Raw offshore GFS Hs",
+        zorder=3,
+    )
+
+    raw_gfs_axis.plot(
+        times,
+        raw_gfs_height,
+        color=SITE_INK,
+        linewidth=1.25,
+        zorder=4,
+    )
+
+    raw_gfs_axis.set_ylim(
+        0,
+        maximum_raw_gfs_height
+        * 1.45,
+    )
+
+    raw_gfs_axis.set_ylabel(
+        "GFS Hs (m)"
+    )
+
+    raw_gfs_axis.set_title(
+        "Offshore Hs (GFS)",
+        loc="left",
+        pad=7,
+    )
+
+    style_primary_axis(
+        raw_gfs_axis
+    )
+
+    add_direction_annotations(
+        axis=raw_gfs_axis,
+        times=times,
+        directions_from_deg=forecast_data[
+            "wave_direction_deg"
+        ],
+        compass_labels=forecast_data[
+            "wave_direction_compass"
+        ],
+        annotation_step=annotation_step,
+    )
+
+    raw_gfs_axis.legend(
+        loc="upper left",
+        bbox_to_anchor=(
+            0.0,
+            1.02,
+        ),
+        frameon=False,
     )
 
     #### WIND #################################################################
@@ -4109,6 +4189,11 @@ def plot_publication_surf_forecast(
         labelbottom=False,
     )
 
+    raw_gfs_axis.tick_params(
+        axis="x",
+        labelbottom=False,
+    )
+
     wind_axis.tick_params(
         axis="x",
         labelbottom=False,
@@ -4117,6 +4202,7 @@ def plot_publication_surf_forecast(
     for axis in (
         quality_axis,
         wave_axis,
+        raw_gfs_axis,
         wind_axis,
         tide_axis,
     ):
@@ -4132,6 +4218,7 @@ def plot_publication_surf_forecast(
     add_day_divisions(
         axes=(
             wave_axis,
+            raw_gfs_axis,
             wind_axis,
             tide_axis,
         ),
@@ -4142,6 +4229,7 @@ def plot_publication_surf_forecast(
     figure.align_ylabels(
         [
             wave_axis,
+            raw_gfs_axis,
             wind_axis,
             tide_axis,
         ]
