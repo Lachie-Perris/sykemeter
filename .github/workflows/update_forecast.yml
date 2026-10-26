@@ -8,6 +8,8 @@ on:
       - "docs/**"
       - "check_cycle.py"
       - "generate_site.py"
+      - "save_generated_forecast.py"
+      - "test_save_generated_forecast.py"
       - "requirements.txt"
       - "surf_forecast.py"
       - "model_config.json"
@@ -78,6 +80,10 @@ jobs:
           python -m pip install -r requirements.txt
           python -m cfgrib selfcheck
 
+      - name: Test forecast persistence
+        if: steps.cycle.outputs.needs_update == 'true'
+        run: python -m unittest test_save_generated_forecast.py
+
       - name: Generate final forecast SVG
         if: steps.cycle.outputs.needs_update == 'true'
         run: |
@@ -111,15 +117,4 @@ jobs:
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add \
-            docs/final_surf_forecast.svg \
-            .forecast_state/latest_gfs_cycle.txt
-
-          if git diff --cached --quiet; then
-            echo "No generated changes to commit."
-          else
-            git commit -m \
-              "Update forecast ${{ steps.cycle.outputs.cycle_key }}"
-            git pull --rebase origin main
-            git push origin main
-          fi
+          python save_generated_forecast.py
