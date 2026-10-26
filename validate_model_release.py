@@ -48,6 +48,8 @@ def validate(skip_forecast=False):
     html=(ROOT/'docs/swan_model_explorer.html').read_text()
     assert '"mda_case_013"' not in html
     assert 'cleaned_tp_mda_001' in html
+    assert '(spot.col + 0.5) * cellWidth' in html
+    assert '(rows - spot.row - 0.5) * cellHeight' in html
     # Every relative URL referenced by the landing page must exist locally.
     index=(ROOT/'docs/index.html').read_text()
     for url in re.findall(r'(?:src|href)="([^"]+)"',index):

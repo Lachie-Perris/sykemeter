@@ -488,8 +488,8 @@
             }
 
             const spot = explorerData.metadata.spot;
-            const spotX = spot.col * cellWidth;
-            const spotY = (rows - spot.row) * cellHeight;
+            const spotX = (spot.col + 0.5) * cellWidth;
+            const spotY = (rows - spot.row - 0.5) * cellHeight;
             context.lineWidth = 2;
             context.strokeStyle = "white";
             context.beginPath();
