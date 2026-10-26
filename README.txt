@@ -21,6 +21,33 @@ Forecast Inputs
 Wave Transfer Matrix
 --------------------
 
+Model update: 26 October 2026
+
+The current extraction point is SWAN local xi=4450 m, eta=10100 m
+(output row 78, column 49, zero-based). Its geographic location is
+23.41023048 S, 152.03744157 E, transformed from the bathymetry's
+ESRI:54004 Mercator CRS. The nearest GFS Wave sampling point is
+23.50 S, 152.00 E. model_config.json is the authoritative runtime
+configuration for the spot location and the three tide matrices.
+
+The current model uses 15 cleaned-Tp MDA cases and 15 K-means-average
+conditions at all three tides (90 successful model combinations).
+The period analysis excluded 254 records at the reported 20.48 s bin
+and 297 isolated upward Tp spikes. Ceiling exclusion is provisional
+and quality flags have not been assigned unverified meanings.
+
+Simulated peak periods span 3.53-17.07 s. Legacy matrix columns outside
+that range are extrapolated. The long matrix table flags these columns;
+coefficients are guidance rather than independent forecast validation.
+The matrix is Hs-independent even though SWAN transformation can depend
+on offshore height; it represents the fitted set of modelled conditions.
+
+The model explorer, spot marker and supporting figures use these same
+90 model combinations. docs/assets/swan_wave_cases.csv contains the
+published case inventory. docs/model_config.json records provenance.
+The final forecast SVG embeds the matching model configuration and
+generate_site.py checks matrix hashes before generating it.
+
 The transfer matrix was derived from One Tree Island South wave observations.
 Historic wave records were filtered for outliers, then representative offshore
 conditions were selected with a maximum-dissimilarity algorithm. K-means average

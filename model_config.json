@@ -1,0 +1,48 @@
+{
+  "model_version": "2026-10-26-period-qc-new-spot",
+  "spot": {
+    "name": "Sykemeter",
+    "latitude": -23.410230476881477,
+    "longitude": 152.03744156954428,
+    "swan_xi_m": 4450.0,
+    "swan_eta_m": 10100.0,
+    "swan_output_row": 78,
+    "swan_output_col": 49,
+    "xbeach_ix": 1110,
+    "xbeach_iy": 80,
+    "source_crs": "ESRI:54004",
+    "source_projected_x_m": 16924730.577033754,
+    "source_projected_y_m": -2664734.773836766
+  },
+  "offshore_gfs": {
+    "latitude": -23.5,
+    "longitude": 152.0
+  },
+  "analysis": {
+    "variant": "cleaned_tp",
+    "wave_cases": 30,
+    "model_runs": 90,
+    "tides_m": [
+      -1.5,
+      0,
+      1.5
+    ],
+    "excluded_ceiling_records": 254,
+    "excluded_isolated_tp_spikes": 297,
+    "period_sample_range_s": [
+      3.53,
+      17.07
+    ],
+    "period_extrapolation_note": "Legacy period columns outside the sampled period range are extrapolated; see long table flag."
+  },
+  "source_summary_sha256": "1f29050fcb84f0fdeead6f615223a2c4e8afbd44e82321321308f520bff12c55",
+  "matrix_sha256": {
+    "wave_transfer_matrix.txt": "52b7b8aaae7318974feb19d5eefb1c22c431aaf54f807f1d2c4033e2464120aa",
+    "wave_transfer_matrix_swan_derived.txt": "52b7b8aaae7318974feb19d5eefb1c22c431aaf54f807f1d2c4033e2464120aa",
+    "wave_transfer_matrix_swan_derived_tide_low.txt": "cac6e0e0248db9c8d63c4d2274782e71b920be5a58c6700500c1b0df671f64d7",
+    "wave_transfer_matrix_swan_derived_tide_mid.txt": "52b7b8aaae7318974feb19d5eefb1c22c431aaf54f807f1d2c4033e2464120aa",
+    "wave_transfer_matrix_swan_derived_tide_high.txt": "7657726b39e82f4fdb9ce1fc515495e0d5a17dc48eed78cc8b95486267394cb1",
+    "wave_transfer_matrix_swan_derived_tide_long.csv": "1ff7ffaaed9d40157576be4148c6690fffca3cbd620f0154d4725c21f1d687f0"
+  },
+  "matrix_hash_encoding": "UTF-8 bytes with CRLF normalized to LF"
+}

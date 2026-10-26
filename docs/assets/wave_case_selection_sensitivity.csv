@@ -1,0 +1,13 @@
+variant,method,candidate_records,selected_cases,period_kind,selected_period_min_s,selected_period_max_s,selected_period_ge18_s,selected_period_at_ceiling
+baseline_tp,mda,30513,15,Tp,3.53,20.48,8,8
+baseline_tp,kmeans_average,30513,15,Tp,4.6771630434782665,19.79803738317757,2,0
+baseline_tp,kmeans_medoid,30513,15,Tp,4.64,20.48,2,2
+ceiling_filtered_tp,mda,30259,15,Tp,3.53,17.07,0,0
+ceiling_filtered_tp,kmeans_average,30259,15,Tp,4.712961672473863,13.49216603053416,0,0
+ceiling_filtered_tp,kmeans_medoid,30259,15,Tp,4.64,12.8,0,0
+cleaned_tp,mda,29962,15,Tp,3.53,17.07,0,0
+cleaned_tp,kmeans_average,29962,15,Tp,4.711202090592329,16.564772727272725,0,0
+cleaned_tp,kmeans_medoid,29962,15,Tp,4.65,17.07,0,0
+cleaned_tm01,mda,29962,15,Tp,3.53,17.07,0,0
+cleaned_tm01,kmeans_average,29962,15,Tm01 centroid,4.307051724137932,13.25368421052632,0,0
+cleaned_tm01,kmeans_medoid,29962,15,Tp,4.88,17.07,0,0

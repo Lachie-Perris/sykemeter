@@ -1,5 +1,5 @@
 const FORECAST = "final_surf_forecast.svg";
-const fallback = { height:"0.23 m", rating:"Poor", swell:"6.0 s from SE", wind:"18.1 kt from SE", tide:"1.10 m ↓ Falling", updated:"Current conditions", run:"GFS Wave forecast" };
+const fallback = { height:"—", rating:"Unavailable", swell:"—", wind:"—", tide:"—", updated:"Forecast unavailable", run:"" };
 
 function textValues(svg) {
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");

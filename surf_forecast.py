@@ -26,6 +26,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 from dataclasses import dataclass
+import json
 from io import StringIO
 from pathlib import Path
 import tempfile
@@ -79,14 +80,15 @@ TIDE_TRANSFER_MATRIX_LONG_PATH = (
 
 #### LOCATION CONFIGURATION ####################################################
 
-SPOT_NAME = "Sykemeter"
+MODEL_CONFIG_PATH = MODULE_DIRECTORY / "model_config.json"
+MODEL_CONFIG = json.loads(MODEL_CONFIG_PATH.read_text(encoding="utf-8"))
+SPOT_NAME = MODEL_CONFIG["spot"]["name"]
+SPOT_LAT = float(MODEL_CONFIG["spot"]["latitude"])
+SPOT_LON = float(MODEL_CONFIG["spot"]["longitude"])
 
-SPOT_LAT = -23.348043530796062
-SPOT_LON = 152.618531665867
-
-# Known nearest GFS Wave grid point.
-GFS_GRID_LAT = -23.25
-GFS_GRID_LON = 152.50
+# Nearest 0.25-degree GFS Wave point to the saved model extraction location.
+GFS_GRID_LAT = float(MODEL_CONFIG["offshore_gfs"]["latitude"])
+GFS_GRID_LON = float(MODEL_CONFIG["offshore_gfs"]["longitude"])
 
 LOCAL_TZ = "Australia/Brisbane"
 LOCAL_TZ_INFO = ZoneInfo(LOCAL_TZ)
@@ -4283,6 +4285,12 @@ def plot_publication_surf_forecast(
             encoding="utf-8"
         )
 
+        # Keep the public SVG traceable to the exact extraction point and matrices.
+        from xml.sax.saxutils import escape
+        provenance = '<metadata id="sykemeter-model">' + escape(json.dumps(MODEL_CONFIG)) + '</metadata>'
+        svg_open_end = svg_text.index('>', svg_text.index('<svg')) + 1
+        svg_text = svg_text[:svg_open_end] + provenance + svg_text[svg_open_end:]
+
         svg_text = svg_text.replace(
             "font-family: 'DejaVu Sans'",
             "font-family: Inter, Arial, sans-serif",
@@ -4298,6 +4306,7 @@ def plot_publication_surf_forecast(
             "Inter, Arial, sans-serif",
         )
 
+        svg_text = "\n".join(line.rstrip() for line in svg_text.splitlines()) + "\n"
         output_path.write_text(
             svg_text,
             encoding="utf-8",

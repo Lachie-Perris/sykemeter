@@ -254,7 +254,7 @@
     </main>
 
     <script>
-        const DATA_URL = "assets/swan_model_explorer_data.json?v=20260915-fullres";
+        const DATA_URL = "assets/swan_model_explorer_data.json?v=20261026-period-qc-new-spot";
         const canvas = document.getElementById("plotCanvas");
         const context = canvas.getContext("2d");
         const caseSelect = document.getElementById("caseSelect");
@@ -377,7 +377,9 @@
                 variableSelect.appendChild(element);
             }
 
-            caseSelect.value = "mda_case_013";
+            const preferredCase = "cleaned_tp_mda_001";
+            caseSelect.value = explorerData.case_options.some(option => option.source_case_id === preferredCase)
+                ? preferredCase : explorerData.case_options[0].source_case_id;
             tideSelect.value = "tide_mid";
             variableSelect.value = "hsign_m";
         }

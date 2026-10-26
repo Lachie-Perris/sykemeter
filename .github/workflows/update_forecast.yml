@@ -10,6 +10,8 @@ on:
       - "generate_site.py"
       - "requirements.txt"
       - "surf_forecast.py"
+      - "model_config.json"
+      - "validate_model_release.py"
       - "wave_transfer_matrix*.txt"
       - "wave_transfer_matrix_swan_derived_tide_long.csv"
       - ".github/workflows/update_forecast.yml"
@@ -82,6 +84,10 @@ jobs:
           python generate_site.py \
             --date "${{ steps.cycle.outputs.date_string }}" \
             --cycle "${{ steps.cycle.outputs.cycle }}"
+
+      - name: Validate model and forecast consistency
+        if: steps.cycle.outputs.needs_update == 'true'
+        run: python validate_model_release.py
 
       - name: Configure GitHub Pages
         if: steps.cycle.outputs.needs_update == 'true' || github.event_name == 'push'

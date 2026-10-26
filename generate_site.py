@@ -8,6 +8,8 @@ cycle marker are replaced only after successful forecast generation.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 from pathlib import Path
 
 from surf_forecast import (
@@ -34,6 +36,13 @@ def validate_required_runtime_files() -> None:
     """
     Fail early if no tide-aware SWAN matrix source is in the repository.
     """
+    config_path = Path(__file__).resolve().parent / "model_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    for filename, expected in config["matrix_sha256"].items():
+        matrix_path = config_path.parent / filename
+        if not matrix_path.exists() or hashlib.sha256(matrix_path.read_bytes().replace(b'\r\n', b'\n')).hexdigest() != expected:
+            raise RuntimeError(f"Transfer matrix does not match model_config.json: {filename}")
+
     missing_paths = [
         path
         for path in TIDE_TRANSFER_MATRIX_PATHS.values()
