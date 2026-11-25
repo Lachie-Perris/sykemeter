@@ -10,6 +10,8 @@ on:
       - "generate_site.py"
       - "save_generated_forecast.py"
       - "test_save_generated_forecast.py"
+      - "wait_pages_artifact.py"
+      - "test_wait_pages_artifact.py"
       - "requirements.txt"
       - "surf_forecast.py"
       - "model_config.json"
@@ -32,6 +34,7 @@ on:
         default: false
 
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -82,7 +85,7 @@ jobs:
 
       - name: Test forecast persistence
         if: steps.cycle.outputs.needs_update == 'true'
-        run: python -m unittest test_save_generated_forecast.py
+        run: python -m unittest test_save_generated_forecast.py test_wait_pages_artifact.py
 
       - name: Generate final forecast SVG
         if: steps.cycle.outputs.needs_update == 'true'
@@ -100,10 +103,19 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload website
+        id: upload
         if: steps.cycle.outputs.needs_update == 'true' || github.event_name == 'push'
         uses: actions/upload-pages-artifact@v5
         with:
           path: docs
+
+      - name: Wait for Pages artifact availability
+        if: steps.cycle.outputs.needs_update == 'true' || github.event_name == 'push'
+        timeout-minutes: 6
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_ARTIFACT_ID: ${{ steps.upload.outputs.artifact_id }}
+        run: python3 wait_pages_artifact.py
 
       - name: Deploy website
         if: steps.cycle.outputs.needs_update == 'true' || github.event_name == 'push'
